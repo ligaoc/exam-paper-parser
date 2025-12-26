@@ -20,6 +20,34 @@
       </template>
       
       <el-tabs v-model="activeTab">
+        <!-- 完整内容 -->
+        <el-tab-pane label="完整内容" name="fullContent">
+          <div class="full-content-panel">
+            <div class="content-stats">
+              <el-tag type="info">{{ contentBlockStats.paragraphs }} 个段落</el-tag>
+              <el-tag type="success">{{ contentBlockStats.tables }} 个表格</el-tag>
+              <el-tag type="warning">{{ contentBlockStats.images }} 张图片</el-tag>
+            </div>
+            <div v-if="result.contentBlocks?.length" class="content-blocks">
+              <template v-for="(block, index) in result.contentBlocks" :key="index">
+                <!-- 段落 -->
+                <div v-if="block.type === 'paragraph'" class="content-paragraph">
+                  {{ block.content }}
+                </div>
+                <!-- 表格 -->
+                <div v-else-if="block.type === 'table'" class="content-table">
+                  <div class="content-table-wrapper" v-html="block.content.html"></div>
+                </div>
+                <!-- 图片 -->
+                <div v-else-if="block.type === 'image'" class="content-image">
+                  <img :src="block.content.dataUrl" :alt="'图片 ' + (block.content.position + 1)" />
+                </div>
+              </template>
+            </div>
+            <el-empty v-else description="未解析到内容" />
+          </div>
+        </el-tab-pane>
+        
         <!-- 题目结构 -->
         <el-tab-pane label="题目结构" name="structure">
           <div class="structure-tree">
@@ -140,6 +168,42 @@
             </div>
           </div>
         </el-tab-pane>
+        
+        <!-- 表格识别 -->
+        <el-tab-pane label="表格识别" name="tables">
+          <div class="tables-panel">
+            <el-statistic title="识别到的表格数量" :value="result.tables?.length || 0" />
+            <div v-if="result.tables?.length" class="tables-list">
+              <div v-for="(table, index) in result.tables" :key="table.id" class="table-item">
+                <div class="table-header">
+                  <span class="table-title">表格 {{ index + 1 }}</span>
+                  <el-tag size="small">{{ table.rowCount }}行 × {{ table.colCount }}列</el-tag>
+                </div>
+                <div class="table-content" v-html="table.html"></div>
+              </div>
+            </div>
+            <el-empty v-else description="未识别到表格" :image-size="100" />
+          </div>
+        </el-tab-pane>
+        
+        <!-- 图片识别 -->
+        <el-tab-pane label="图片识别" name="images">
+          <div class="images-panel">
+            <el-statistic title="识别到的图片数量" :value="result.images?.length || 0" />
+            <div v-if="result.images?.length" class="images-list">
+              <div v-for="(image, index) in result.images" :key="image.id" class="image-item">
+                <div class="image-header">
+                  <span class="image-title">图片 {{ index + 1 }}</span>
+                  <el-tag size="small">{{ image.fileName }}</el-tag>
+                </div>
+                <div class="image-content">
+                  <img :src="image.dataUrl" :alt="'图片 ' + (index + 1)" />
+                </div>
+              </div>
+            </div>
+            <el-empty v-else description="未识别到图片" :image-size="100" />
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
     
@@ -159,7 +223,17 @@ const props = defineProps({
   }
 })
 
-const activeTab = ref('structure')
+const activeTab = ref('fullContent')
+
+// 内容块统计
+const contentBlockStats = computed(() => {
+  const blocks = props.result?.contentBlocks || []
+  return {
+    paragraphs: blocks.filter(b => b.type === 'paragraph').length,
+    tables: blocks.filter(b => b.type === 'table').length,
+    images: blocks.filter(b => b.type === 'image').length
+  }
+})
 
 // 树形数据
 const treeData = computed(() => {
@@ -373,5 +447,196 @@ async function exportResult() {
   background: #f5f7fa;
   border-radius: 4px;
   margin-bottom: 8px;
+}
+
+.tables-panel {
+  padding: 10px 0;
+}
+
+.tables-list {
+  margin-top: 20px;
+}
+
+.table-item {
+  margin-bottom: 24px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.table-title {
+  font-weight: 500;
+  color: #303133;
+}
+
+.table-content {
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.table-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table-content :deep(th),
+.table-content :deep(td) {
+  border: 1px solid #dcdfe6;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.table-content :deep(th) {
+  background: #f5f7fa;
+  font-weight: 500;
+  color: #303133;
+}
+
+.table-content :deep(td) {
+  color: #606266;
+}
+
+.table-content :deep(tr:hover td) {
+  background: #f5f7fa;
+}
+
+/* 完整内容面板样式 */
+.full-content-panel {
+  padding: 10px 0;
+}
+
+.content-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.content-blocks {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 20px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.content-paragraph {
+  margin-bottom: 12px;
+  line-height: 1.8;
+  color: #303133;
+  text-align: justify;
+}
+
+.content-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.content-table {
+  margin: 16px 0;
+  overflow-x: auto;
+}
+
+.content-table-wrapper {
+  display: inline-block;
+  min-width: 100%;
+}
+
+.content-table-wrapper :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 0;
+}
+
+.content-table-wrapper :deep(th),
+.content-table-wrapper :deep(td) {
+  border: 1px solid #dcdfe6;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.content-table-wrapper :deep(th) {
+  background: #f5f7fa;
+  font-weight: 500;
+  color: #303133;
+}
+
+.content-table-wrapper :deep(td) {
+  color: #606266;
+}
+
+.content-table-wrapper :deep(tr:hover td) {
+  background: #fafafa;
+}
+
+/* 图片面板样式 */
+.images-panel {
+  padding: 10px 0;
+}
+
+.images-list {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.image-item {
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.image-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.image-title {
+  font-weight: 500;
+  color: #303133;
+}
+
+.image-content {
+  padding: 16px;
+  text-align: center;
+  background: #fafafa;
+}
+
+.image-content img {
+  max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* 完整内容中的图片样式 */
+.content-image {
+  margin: 16px 0;
+  text-align: center;
+}
+
+.content-image img {
+  max-width: 100%;
+  max-height: 500px;
+  object-fit: contain;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 8px;
+  background: #fafafa;
 }
 </style>

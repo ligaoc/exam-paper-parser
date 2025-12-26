@@ -123,6 +123,10 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
     let content = null
     let headers = []
     let footers = []
+    let tables = []
+    let contentBlocks = []
+    
+    let images = []
     
     // 根据文件类型选择解析器
     if (ext === 'docx' || ext === 'doc') {
@@ -130,6 +134,9 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
       content = result.text
       headers = result.headers || []
       footers = result.footers || []
+      tables = result.tables || []
+      contentBlocks = result.contentBlocks || []
+      images = result.images || []
     } else if (ext === 'pdf') {
       const result = await pdfParser.parse(filePath)
       content = result.text
@@ -157,6 +164,9 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
       structure: extracted.questions,
       headers: headers,
       footers: footers,
+      tables: tables,
+      images: images,
+      contentBlocks: contentBlocks,
       brackets: extracted.brackets,
       underlines: extracted.underlines,
       ruleId: rule?.id,
