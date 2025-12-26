@@ -48,6 +48,19 @@ DOCX 表格解析优化功能旨在解决当前系统解析 Word 文档时表格
 1. WHEN 单元格包含多段落文本 THEN THE Table_Parser SHALL 保留段落分隔
 2. WHEN 表格有表头行 THEN THE Table_Parser SHALL 尝试识别并标记表头
 3. THE Table_Parser SHALL 保留单元格内的换行符
+4. WHEN 单元格包含图片 THEN THE Table_Parser SHALL 提取图片并保留在单元格内容中
+5. WHEN 单元格包含图片 THEN THE Table_Parser SHALL 在单元格的 images 数组中存储图片数据
+6. WHEN 生成表格 HTML THEN THE Table_Parser SHALL 在单元格中正确渲染图片
+
+### Requirement 7: 内容块去重
+
+**User Story:** As a 开发者, I want to 确保内容块不重复, so that 表格内的内容不会被重复提取到表格外。
+
+#### Acceptance Criteria
+
+1. WHEN 构建内容块列表 THEN THE Table_Parser SHALL 排除表格范围内的图片作为独立内容块
+2. WHEN 构建内容块列表 THEN THE Table_Parser SHALL 排除表格范围内的段落作为独立内容块
+3. WHEN 表格包含图片 THEN THE Table_Parser SHALL 仅在表格单元格内保留图片引用
 
 ### Requirement 4: 表格位置追踪
 
@@ -66,9 +79,10 @@ DOCX 表格解析优化功能旨在解决当前系统解析 Word 文档时表格
 #### Acceptance Criteria
 
 1. THE Table_Parser SHALL 输出表格为二维数组格式（行数组包含单元格数组）
-2. THE Table_Parser SHALL 为每个单元格提供 text、rowspan、colspan 属性
+2. THE Table_Parser SHALL 为每个单元格提供 text、rowspan、colspan、images 属性
 3. THE Table_Parser SHALL 提供表格的 HTML 表示形式（可选，用于直接渲染）
 4. WHEN 表格数据被序列化 THEN THE Table_Parser SHALL 确保可以从 JSON 还原完整表格结构
+5. WHEN 单元格包含图片 THEN THE Table_Parser SHALL 在 HTML 输出中包含 img 标签
 
 ### Requirement 6: 向后兼容
 

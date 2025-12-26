@@ -76,6 +76,15 @@ interface Cell {
   rowspan: number;         // 行跨度（默认1）
   colspan: number;         // 列跨度（默认1）
   isMerged: boolean;       // 是否被其他单元格合并覆盖
+  images: CellImage[];     // 单元格内的图片数组
+}
+
+interface CellImage {
+  id: string;              // 图片唯一标识符
+  rId: string;             // 关系 ID
+  mimeType: string;        // MIME 类型
+  base64: string;          // Base64 编码的图片数据
+  dataUrl: string;         // Data URL 格式
 }
 ```
 
@@ -143,6 +152,48 @@ DOCX 文件中的表格存储在 `word/document.xml` 中，结构如下：
 2. **垂直合并 (rowspan)**：
    - `<w:vMerge w:val="restart"/>` 表示合并起始
    - `<w:vMerge/>` (无 val 属性) 表示被合并的单元格
+
+### 单元格图片提取逻辑
+
+单元格内的图片通过 `<w:drawing>` 元素表示：
+
+```xml
+<w:tc>
+  <w:p>
+    <w:r>
+      <w:drawing>
+        <wp:inline>
+          <a:graphic>
+            <a:graphicData>
+              <pic:pic>
+                <pic:blipFill>
+                  <a:blip r:embed="rId5"/>  <!-- 图片关系 ID -->
+                </pic:blipFill>
+              </pic:pic>
+            </a:graphicData>
+          </a:graphic>
+        </wp:inline>
+      </w:drawing>
+    </w:r>
+  </w:p>
+</w:tc>
+```
+
+提取步骤：
+1. 在单元格 XML 中查找所有 `<w:drawing>` 元素
+2. 从 `r:embed` 属性获取关系 ID
+3. 通过关系 ID 在 `word/_rels/document.xml.rels` 中查找图片路径
+4. 从 `word/media/` 目录读取图片数据
+5. 将图片添加到单元格的 `images` 数组
+
+### 内容块去重逻辑
+
+构建 contentBlocks 时需要避免重复提取表格内的内容：
+
+1. 首先识别所有表格的位置范围（start, end）
+2. 提取图片时，检查图片位置是否在任何表格范围内
+3. 如果图片在表格内，跳过（图片已在表格单元格中处理）
+4. 提取段落时，同样检查段落是否在表格范围内
 
 ## Correctness Properties
 

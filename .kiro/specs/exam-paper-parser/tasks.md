@@ -88,6 +88,12 @@
     - 支持拖拽和点击选择文件
     - 显示文件列表和状态
     - _Requirements: 1.1, 1.6_
+  - [x] 5.1.1 添加规则选择功能
+    - 在文件导入组件中添加规则选择下拉框
+    - 组件加载时获取规则列表并选中默认规则
+    - 解析时传递选中的规则ID
+    - 文件列表中显示使用的规则名称
+    - _Requirements: 1.7, 1.8, 1.9, 1.10, 1.11, 9.6, 9.9, 9.10_
   - [x] 5.2 创建解析结果展示组件
     - 创建 `electron-app/src/renderer/components/ResultView.vue`
     - 以树形结构展示题目层级
@@ -109,6 +115,10 @@
     - 实现规则 CRUD 操作
     - 实现默认规则
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
+  - [x] 6.1.1 添加获取默认规则 IPC 接口
+    - 在 ipcHandlers.js 中添加 rule:getDefault 处理器
+    - 在 preload.js 中暴露 getDefaultRule API
+    - _Requirements: 9.8_
   - [ ]* 6.2 编写规则引擎属性测试
     - 在 `electron-app/tests/property/` 目录下创建测试
     - **Property 11: 规则应用一致性**
@@ -129,6 +139,10 @@
     - 实现并发控制（最多3个）
     - 实现进度跟踪和错误处理
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
+  - [x] 8.1.1 批量处理支持规则选择
+    - 批量处理时使用用户选定的规则
+    - 在批量面板中显示当前使用的规则
+    - _Requirements: 9.11_
   - [ ]* 8.2 编写批量处理属性测试
     - 在 `electron-app/tests/property/` 目录下创建测试
     - **Property 10: 批量处理并发限制**

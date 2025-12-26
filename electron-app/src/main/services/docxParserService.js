@@ -22,6 +22,7 @@ const { v4: uuidv4 } = require('uuid')
  * @param {number} [options.rowspan=1] - 行跨度
  * @param {number} [options.colspan=1] - 列跨度
  * @param {boolean} [options.isMerged=false] - 是否被其他单元格合并覆盖
+ * @param {Array} [options.images=[]] - 单元格内的图片数组
  * @returns {Object} 单元格对象
  */
 function createCell(options) {
@@ -31,7 +32,8 @@ function createCell(options) {
     colIndex: options.colIndex,
     rowspan: options.rowspan || 1,
     colspan: options.colspan || 1,
-    isMerged: options.isMerged || false
+    isMerged: options.isMerged || false,
+    images: options.images || []
   }
 }
 
@@ -245,15 +247,44 @@ function decodeXmlEntities(text) {
  * @param {string} xml - XML 字符串
  */
 function extractTextFromXml(xml) {
-  // 简单的文本提取：移除所有 XML 标签
+  // 提取文本时需要处理：
+  // 1. <w:t> 标签中的文本内容
+  // 2. <w:tab/> 制表符 - 转换为制表符字符
+  // 3. <w:br/> 换行符 - 转换为换行符
+  
+  // 先将制表符和换行符替换为占位符
+  let processedXml = xml
+    .replace(/<w:tab\s*\/>/g, '\t')  // 制表符
+    .replace(/<w:br\s*\/>/g, '\n')   // 换行符
+  
   // 匹配 <w:t> 标签中的文本（Word 文档的文本节点）
-  const textMatches = xml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || []
+  const textMatches = processedXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || []
   const texts = textMatches.map(match => {
     const textMatch = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/)
     return textMatch ? decodeXmlEntities(textMatch[1]) : ''
   })
   
-  return texts.join('')
+  // 合并文本，保留制表符和换行符
+  let result = ''
+  let lastIndex = 0
+  
+  // 重新遍历，按顺序提取文本和特殊字符
+  const tokenRegex = /<w:t[^>]*>([^<]*)<\/w:t>|(\t)|(\n)/g
+  let match
+  while ((match = tokenRegex.exec(processedXml)) !== null) {
+    if (match[1] !== undefined) {
+      // 文本内容
+      result += decodeXmlEntities(match[1])
+    } else if (match[2]) {
+      // 制表符
+      result += '\t'
+    } else if (match[3]) {
+      // 换行符
+      result += '\n'
+    }
+  }
+  
+  return result
 }
 
 // ============================================
@@ -278,6 +309,52 @@ function extractCellText(cellXml) {
   
   // 用换行符连接多个段落
   return texts.filter(t => t).join('\n')
+}
+
+/**
+ * 从单元格 XML 中提取完整内容（文本和图片）
+ * @param {string} cellXml - 单元格 XML 字符串
+ * @param {Object} imageRels - 图片关系映射 { rId: { target: 'word/media/xxx.png' } }
+ * @param {Object} imageCache - 图片缓存 { 'word/media/xxx.png': { mimeType, base64, dataUrl } }
+ * @returns {Object} { text: string, images: Array }
+ */
+function extractCellContent(cellXml, imageRels, imageCache) {
+  // 提取文本
+  const text = extractCellText(cellXml)
+  
+  // 提取图片
+  const images = []
+  const drawingRegex = /<w:drawing[^>]*>[\s\S]*?<\/w:drawing>/g
+  let drawingMatch
+  
+  while ((drawingMatch = drawingRegex.exec(cellXml)) !== null) {
+    const drawingXml = drawingMatch[0]
+    
+    // 提取图片引用 ID (r:embed="rIdX")
+    const blipMatch = drawingXml.match(/r:embed="([^"]*)"/)
+    if (blipMatch) {
+      const rId = blipMatch[1]
+      const imageRelInfo = imageRels[rId]
+      
+      if (imageRelInfo) {
+        const imagePath = imageRelInfo.target
+        const cachedImage = imageCache[imagePath]
+        
+        if (cachedImage) {
+          images.push({
+            id: uuidv4(),
+            rId: rId,
+            path: imagePath,
+            mimeType: cachedImage.mimeType,
+            base64: cachedImage.base64,
+            dataUrl: cachedImage.dataUrl
+          })
+        }
+      }
+    }
+  }
+  
+  return { text, images }
 }
 
 /**
@@ -314,9 +391,11 @@ function parseCellMergeInfo(cellXml) {
  * 解析单个表格 XML
  * @param {string} tableXml - 表格 XML 字符串
  * @param {number} position - 表格在文档中的位置索引
+ * @param {Object} [imageRels={}] - 图片关系映射
+ * @param {Object} [imageCache={}] - 图片缓存
  * @returns {Object} 表格对象
  */
-function parseTableXml(tableXml, position) {
+function parseTableXml(tableXml, position, imageRels = {}, imageCache = {}) {
   // 获取列数（从 tblGrid 中）
   const gridColMatches = tableXml.match(/<w:gridCol[^>]*\/>/g) || []
   const colCount = gridColMatches.length
@@ -358,13 +437,14 @@ function parseTableXml(tableXml, position) {
           colIndex,
           rowspan: 1,
           colspan: 1,
-          isMerged: true
+          isMerged: true,
+          images: []
         }))
         colIndex++
       }
       
-      // 提取单元格文本
-      const text = extractCellText(cellXml)
+      // 提取单元格内容（文本和图片）
+      const { text, images } = extractCellContent(cellXml, imageRels, imageCache)
       
       // 解析合并信息
       const { colspan, vMergeType } = parseCellMergeInfo(cellXml)
@@ -377,7 +457,8 @@ function parseTableXml(tableXml, position) {
           colIndex,
           rowspan: 1,
           colspan,
-          isMerged: true
+          isMerged: true,
+          images: []
         }))
         
         // 更新合并追踪器中的 rowspan
@@ -394,7 +475,8 @@ function parseTableXml(tableXml, position) {
           colIndex,
           rowspan: 1, // 稍后计算
           colspan,
-          isMerged: false
+          isMerged: false,
+          images
         })
         cells.push(cell)
         
@@ -422,7 +504,8 @@ function parseTableXml(tableXml, position) {
           colIndex,
           rowspan: 1,
           colspan: 1,
-          isMerged: true
+          isMerged: true,
+          images: []
         }))
       }
       colIndex++
@@ -483,14 +566,32 @@ function generateTableHtml(table) {
         attrs += ` colspan="${cell.colspan}"`
       }
       
-      // 转义 HTML 特殊字符并保留换行
-      const escapedText = cell.text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\n/g, '<br>')
+      // 构建单元格内容
+      let cellContent = ''
       
-      html += `    <${tag}${attrs}>${escapedText}</${tag}>\n`
+      // 添加图片
+      if (cell.images && cell.images.length > 0) {
+        for (const img of cell.images) {
+          cellContent += `<img src="${img.dataUrl}" style="max-width: 200px; max-height: 150px;" />`
+        }
+      }
+      
+      // 添加文本（转义 HTML 特殊字符并保留换行）
+      if (cell.text) {
+        const escapedText = cell.text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br>')
+        
+        if (cellContent) {
+          cellContent += '<br>' + escapedText
+        } else {
+          cellContent = escapedText
+        }
+      }
+      
+      html += `    <${tag}${attrs}>${cellContent}</${tag}>\n`
     }
     
     html += row.isHeader ? '  </tr></thead>\n' : '  </tr>\n'
@@ -521,6 +622,55 @@ async function extractTables(filePath) {
     
     const documentXml = zip.readAsText(documentEntry)
     
+    // 读取并解析图片关系映射
+    const relsEntry = zip.getEntry('word/_rels/document.xml.rels')
+    let imageRels = {}
+    let oleRels = {}
+    
+    if (relsEntry) {
+      const relsXml = zip.readAsText(relsEntry)
+      const rels = parseRelationships(relsXml)
+      imageRels = rels.imageRels
+      oleRels = rels.oleRels
+    }
+    
+    // 构建被 OLE 对象引用的文件路径集合
+    const oleTargets = new Set(Object.values(oleRels).map(r => r.target))
+    
+    // 预加载所有真实图片
+    const imageCache = {}
+    const zipEntries = zip.getEntries()
+    for (const entry of zipEntries) {
+      if (entry.entryName.startsWith('word/media/')) {
+        const ext = path.extname(entry.entryName).toLowerCase()
+        
+        // 跳过 OLE 预览图格式
+        if (isOlePreviewFormat(ext)) continue
+        // 跳过不支持的格式
+        if (!isSupportedImageFormat(ext)) continue
+        // 跳过被 OLE 对象引用的文件
+        if (oleTargets.has(entry.entryName)) continue
+        
+        const mimeTypes = {
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.gif': 'image/gif',
+          '.bmp': 'image/bmp',
+          '.webp': 'image/webp',
+          '.svg': 'image/svg+xml'
+        }
+        const mimeType = mimeTypes[ext] || 'image/png'
+        const imageData = zip.readFile(entry)
+        const base64 = imageData.toString('base64')
+        imageCache[entry.entryName] = {
+          mimeType,
+          base64,
+          dataUrl: `data:${mimeType};base64,${base64}`
+        }
+      }
+    }
+    
     // 查找所有表格 <w:tbl>...</w:tbl>
     const tableRegex = /<w:tbl[^>]*>[\s\S]*?<\/w:tbl>/g
     let match
@@ -528,7 +678,7 @@ async function extractTables(filePath) {
     
     while ((match = tableRegex.exec(documentXml)) !== null) {
       const tableXml = match[0]
-      const table = parseTableXml(tableXml, position)
+      const table = parseTableXml(tableXml, position, imageRels, imageCache)
       tables.push(table)
       position++
     }
@@ -542,6 +692,7 @@ async function extractTables(filePath) {
 /**
  * 构建有序的内容块列表
  * 按文档顺序返回段落、表格和图片的混合列表
+ * 注意：表格内的图片和段落不会被重复提取
  * @param {string} filePath - DOCX 文件路径
  * @returns {Promise<Array>} 内容块数组
  */
@@ -593,19 +744,11 @@ async function buildContentBlocks(filePath) {
         const ext = path.extname(entry.entryName).toLowerCase()
         
         // 跳过 OLE 预览图格式（EMF/WMF）
-        if (isOlePreviewFormat(ext)) {
-          continue
-        }
-        
+        if (isOlePreviewFormat(ext)) continue
         // 跳过不支持的格式
-        if (!isSupportedImageFormat(ext)) {
-          continue
-        }
-        
+        if (!isSupportedImageFormat(ext)) continue
         // 跳过被 OLE 对象引用的文件
-        if (oleTargets.has(entry.entryName)) {
-          continue
-        }
+        if (oleTargets.has(entry.entryName)) continue
         
         const mimeTypes = {
           '.png': 'image/png',
@@ -627,33 +770,56 @@ async function buildContentBlocks(filePath) {
       }
     }
     
-    // 找出所有表格和图片的位置
-    const elements = []
-    
-    // 表格位置
+    // 第一步：找出所有表格的位置范围
+    const tableRanges = []
     const tableRegex = /<w:tbl[^>]*>[\s\S]*?<\/w:tbl>/g
     let tableMatch
     while ((tableMatch = tableRegex.exec(bodyXml)) !== null) {
-      elements.push({
-        type: 'table',
+      tableRanges.push({
         start: tableMatch.index,
         end: tableMatch.index + tableMatch[0].length,
         xml: tableMatch[0]
       })
     }
     
-    // 图片位置（在段落中的 drawing 元素）
-    // 只处理真实图片，跳过 OLE 对象
+    // 辅助函数：检查位置是否在任何表格范围内
+    function isInsideTable(position) {
+      for (const range of tableRanges) {
+        if (position >= range.start && position < range.end) {
+          return true
+        }
+      }
+      return false
+    }
+    
+    // 第二步：收集所有顶层元素（表格和不在表格内的图片）
+    const elements = []
+    
+    // 添加表格
+    for (const range of tableRanges) {
+      elements.push({
+        type: 'table',
+        start: range.start,
+        end: range.end,
+        xml: range.xml
+      })
+    }
+    
+    // 添加不在表格内的图片
     const drawingRegex = /<w:drawing[^>]*>[\s\S]*?<\/w:drawing>/g
     let drawingMatch
     while ((drawingMatch = drawingRegex.exec(bodyXml)) !== null) {
       const drawingXml = drawingMatch[0]
+      const drawingStart = drawingMatch.index
+      
+      // 跳过表格内的图片（图片已在表格单元格中处理）
+      if (isInsideTable(drawingStart)) {
+        continue
+      }
       
       // 检查是否在 w:object 标签内（OLE 对象的预览图）
-      // 通过检查 drawing 前面的内容来判断
-      const beforeDrawing = bodyXml.substring(Math.max(0, drawingMatch.index - 200), drawingMatch.index)
+      const beforeDrawing = bodyXml.substring(Math.max(0, drawingStart - 200), drawingStart)
       if (beforeDrawing.includes('<w:object') && !beforeDrawing.includes('</w:object>')) {
-        // 这是 OLE 对象内的预览图，跳过
         continue
       }
       
@@ -662,11 +828,8 @@ async function buildContentBlocks(filePath) {
       if (blipMatch) {
         const rId = blipMatch[1]
         
-        // 检查是否是真实图片关系（不是 OLE 对象）
-        if (oleRels[rId]) {
-          // 这是 OLE 对象引用，跳过
-          continue
-        }
+        // 跳过 OLE 对象引用
+        if (oleRels[rId]) continue
         
         const imageRelInfo = imageRels[rId]
         if (imageRelInfo) {
@@ -674,8 +837,8 @@ async function buildContentBlocks(filePath) {
           if (imageCache[imagePath]) {
             elements.push({
               type: 'image',
-              start: drawingMatch.index,
-              end: drawingMatch.index + drawingMatch[0].length,
+              start: drawingStart,
+              end: drawingStart + drawingXml.length,
               rId: rId,
               imagePath: imagePath,
               imageData: imageCache[imagePath]
@@ -688,16 +851,16 @@ async function buildContentBlocks(filePath) {
     // 按位置排序
     elements.sort((a, b) => a.start - b.start)
     
-    // 构建内容块
+    // 第三步：构建内容块，跳过表格范围内的段落
     let index = 0
     let tableIndex = 0
     let imageIndex = 0
     let lastIndex = 0
     
     for (const element of elements) {
-      // 处理元素之前的段落
+      // 处理元素之前的段落（排除表格内的段落）
       const beforeXml = bodyXml.substring(lastIndex, element.start)
-      const paragraphsBefore = extractParagraphsFromXml(beforeXml)
+      const paragraphsBefore = extractParagraphsFromXmlExcludingTables(beforeXml, tableRanges, lastIndex)
       
       for (const pText of paragraphsBefore) {
         if (pText.trim()) {
@@ -711,7 +874,7 @@ async function buildContentBlocks(filePath) {
       
       // 处理元素
       if (element.type === 'table') {
-        const table = parseTableXml(element.xml, tableIndex++)
+        const table = parseTableXml(element.xml, tableIndex++, imageRels, imageCache)
         contentBlocks.push(createContentBlock({
           type: 'table',
           index: index++,
@@ -734,7 +897,7 @@ async function buildContentBlocks(filePath) {
     
     // 处理最后一个元素之后的段落
     const afterXml = bodyXml.substring(lastIndex)
-    const paragraphsAfter = extractParagraphsFromXml(afterXml)
+    const paragraphsAfter = extractParagraphsFromXmlExcludingTables(afterXml, tableRanges, lastIndex)
     
     for (const pText of paragraphsAfter) {
       if (pText.trim()) {
@@ -753,19 +916,35 @@ async function buildContentBlocks(filePath) {
 }
 
 /**
- * 从 XML 片段中提取段落文本
+ * 从 XML 片段中提取段落文本，排除表格内的段落
  * @param {string} xml - XML 片段
+ * @param {Array} tableRanges - 表格位置范围数组
+ * @param {number} baseOffset - XML 片段在原始文档中的起始偏移
  * @returns {Array<string>} 段落文本数组
  */
-function extractParagraphsFromXml(xml) {
+function extractParagraphsFromXmlExcludingTables(xml, tableRanges, baseOffset) {
   const paragraphs = []
   const paragraphRegex = /<w:p[^>]*>[\s\S]*?<\/w:p>/g
   let match
   
   while ((match = paragraphRegex.exec(xml)) !== null) {
     const pXml = match[0]
-    const text = extractTextFromXml(pXml)
-    paragraphs.push(text)
+    const absolutePosition = baseOffset + match.index
+    
+    // 检查段落是否在表格范围内
+    let insideTable = false
+    for (const range of tableRanges) {
+      if (absolutePosition >= range.start && absolutePosition < range.end) {
+        insideTable = true
+        break
+      }
+    }
+    
+    // 只提取不在表格内的段落
+    if (!insideTable) {
+      const text = extractTextFromXml(pXml)
+      paragraphs.push(text)
+    }
   }
   
   return paragraphs
@@ -990,10 +1169,11 @@ module.exports = {
   extractTables,
   parseTableXml,
   extractCellText,
+  extractCellContent,
   parseCellMergeInfo,
   generateTableHtml,
   buildContentBlocks,
-  extractParagraphsFromXml,
+  extractParagraphsFromXmlExcludingTables,
   // 图片提取函数
   extractImages,
   getImagePositionsFromXml,

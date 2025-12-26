@@ -107,6 +107,34 @@
   - 确保解析结果与原文档表格结构一致
   - 如有问题请询问用户
 
+- [x] 10. 修复表格内图片和内容重复问题
+  - [x] 10.1 实现单元格图片提取
+    - 在 extractCellText 基础上创建 extractCellContent 函数
+    - 解析单元格内的 `<w:drawing>` 元素
+    - 提取图片关系 ID 并获取图片数据
+    - 在 Cell 对象中添加 images 数组
+    - _Requirements: 3.4, 3.5, 5.2_
+
+  - [x] 10.2 更新 createCell 工厂函数
+    - 添加 images 属性支持
+    - _Requirements: 5.2_
+
+  - [x] 10.3 更新 generateTableHtml 函数
+    - 在单元格 HTML 中渲染图片
+    - 使用 img 标签和 data URL
+    - _Requirements: 3.6, 5.5_
+
+  - [x] 10.4 修复 buildContentBlocks 内容去重
+    - 在提取图片前，先确定所有表格的位置范围
+    - 跳过位于表格范围内的图片
+    - 跳过位于表格范围内的段落
+    - _Requirements: 7.1, 7.2, 7.3_
+
+- [ ] 11. Checkpoint - 验证表格内图片功能
+  - 使用包含表格图片的试卷文档测试
+  - 确保图片正确显示在表格单元格内
+  - 确保内容不重复
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP

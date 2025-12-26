@@ -217,6 +217,12 @@ ipcMain.handle('rule:delete', async (event, id) => {
   return true
 })
 
+// 获取默认规则
+ipcMain.handle('rule:getDefault', async () => {
+  const db = await getDatabaseService()
+  return db.getDefaultRule()
+})
+
 // 导出规则
 ipcMain.handle('rule:export', async (event, ids) => {
   const db = await getDatabaseService()

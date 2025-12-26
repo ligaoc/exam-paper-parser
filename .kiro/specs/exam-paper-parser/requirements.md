@@ -18,9 +18,9 @@
 
 ## Requirements
 
-### Requirement 1: 文档导入
+### Requirement 1: 文档导入与规则选择
 
-**User Story:** As a 教师/编辑人员, I want to 导入 Word 和 PDF 试卷文档, so that 系统可以解析文档内容。
+**User Story:** As a 教师/编辑人员, I want to 导入 Word 和 PDF 试卷文档并选择解析规则, so that 系统可以根据不同试卷格式正确解析文档内容。
 
 #### Acceptance Criteria
 
@@ -30,6 +30,11 @@
 4. WHEN 用户导入文字型 PDF 文件 THEN THE Parser SHALL 使用 pdf-parse 库提取文本
 5. WHEN 导入的文件格式不支持 THEN THE Parser SHALL 显示错误提示并拒绝导入
 6. WHEN 文件导入成功 THEN THE Parser SHALL 在界面中显示文件名和基本信息
+7. WHEN 文件导入界面加载 THEN THE System SHALL 显示解析规则选择器
+8. THE System SHALL 在规则选择器中显示所有可用的解析规则
+9. THE System SHALL 默认选中标记为默认的解析规则
+10. WHEN 用户点击解析按钮 THEN THE Parser SHALL 使用用户选中的规则进行解析
+11. WHEN 用户未选择规则 THEN THE Parser SHALL 使用默认规则进行解析
 
 ### Requirement 2: 题号层级提取
 
@@ -119,9 +124,9 @@
 4. THE Batch_Processor SHALL 将处理结果保存到指定文件夹
 5. THE Batch_Processor SHALL 支持后台处理，不阻塞用户界面
 
-### Requirement 9: 识别规则管理
+### Requirement 9: 识别规则管理与应用
 
-**User Story:** As a 教师/编辑人员, I want to 管理识别规则, so that 我可以提高不同类型试卷的识别准确率。
+**User Story:** As a 教师/编辑人员, I want to 管理和选择识别规则, so that 我可以针对不同类型试卷使用合适的规则提高识别准确率。
 
 #### Acceptance Criteria
 
@@ -132,6 +137,10 @@
 5. THE Rule_Engine SHALL 将规则保存到本地数据库
 6. WHEN 用户选择规则 THEN THE Parser SHALL 按照选定规则进行解析
 7. THE Rule_Engine SHALL 支持规则的导入和导出
+8. THE Rule_Engine SHALL 支持设置默认规则
+9. WHEN 用户在文件导入界面选择规则 THEN THE System SHALL 记住该选择用于后续解析
+10. THE System SHALL 在文件列表中显示每个文件使用的解析规则
+11. WHEN 批量处理文件 THEN THE Batch_Processor SHALL 使用用户选定的规则解析所有文件
 
 ### Requirement 10: 结果展示与存储
 

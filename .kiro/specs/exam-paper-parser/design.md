@@ -41,7 +41,7 @@
 ### 1. 渲染进程组件 (Vue 3)
 
 #### 1.1 FileImportComponent
-文件导入组件，支持拖拽和点击选择文件。
+文件导入组件，支持拖拽和点击选择文件，并提供规则选择功能。
 
 ```typescript
 interface FileImportProps {
@@ -57,8 +57,23 @@ interface FileInfo {
   type: 'doc' | 'docx' | 'pdf';
   size: number;
   status: 'pending' | 'processing' | 'completed' | 'error';
+  ruleId?: string;        // 使用的解析规则ID
+  ruleName?: string;      // 使用的解析规则名称
+}
+
+interface RuleSelectState {
+  selectedRuleId: string | null;  // 当前选中的规则ID
+  rules: ParseRule[];             // 可用规则列表
+  defaultRuleId: string | null;   // 默认规则ID
 }
 ```
+
+**规则选择器设计：**
+- 在文件导入区域上方显示规则选择下拉框
+- 下拉框显示所有可用规则，默认规则带有"默认"标签
+- 组件加载时自动获取规则列表并选中默认规则
+- 用户可随时切换规则，切换后新解析的文件将使用新规则
+- 文件列表中显示每个文件使用的规则名称
 
 #### 1.2 ResultViewComponent
 解析结果展示组件，以树形结构展示题目层级。
@@ -286,6 +301,7 @@ interface IpcChannels {
   'rule:update': (id: string, rule: Partial<ParseRule>) => Promise<ParseRule>;
   'rule:delete': (id: string) => Promise<void>;
   'rule:list': () => Promise<ParseRule[]>;
+  'rule:getDefault': () => Promise<ParseRule | null>;
   'history:list': (limit: number) => Promise<ParseResult[]>;
   'history:delete': (fileId: string) => Promise<void>;
 }
@@ -296,6 +312,39 @@ interface IpcEvents {
   'batch:complete': (taskId: string, results: ParseResult[]) => void;
   'batch:error': (taskId: string, error: BatchError) => void;
 }
+```
+
+### 4. 规则选择流程
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     文件导入与规则选择流程                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. 组件加载                                                     │
+│     └── 调用 rule:list 获取所有规则                              │
+│     └── 调用 rule:getDefault 获取默认规则                        │
+│     └── 设置规则选择器默认值                                     │
+│                                                                  │
+│  2. 用户选择文件                                                 │
+│     └── 文件添加到待解析列表                                     │
+│     └── 文件状态设为 'pending'                                   │
+│                                                                  │
+│  3. 用户选择规则（可选）                                         │
+│     └── 从下拉框选择合适的解析规则                               │
+│     └── 或保持默认规则                                           │
+│                                                                  │
+│  4. 用户点击解析                                                 │
+│     └── 调用 file:parse(filePath, selectedRuleId)               │
+│     └── 文件状态更新为 'processing'                              │
+│     └── 解析完成后状态更新为 'completed'                         │
+│     └── 记录使用的规则ID和名称到文件信息                         │
+│                                                                  │
+│  5. 批量解析                                                     │
+│     └── 所有待解析文件使用相同的选中规则                         │
+│     └── 调用 batch:start(filePaths, selectedRuleId)             │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Data Models
@@ -425,6 +474,18 @@ CREATE TABLE batch_tasks (
 *For any* 有效的解析结果，导出为 JSON 后再解析应得到与原结果等价的对象。
 
 **Validates: Requirements 10.4**
+
+### Property 14: 规则选择传递正确性
+
+*For any* 文件解析请求，如果用户指定了规则ID，则解析结果中记录的 ruleId 应与用户指定的规则ID一致；如果用户未指定规则，则应使用默认规则的ID。
+
+**Validates: Requirements 1.10, 1.11, 9.6**
+
+### Property 15: 规则列表完整性
+
+*For any* 规则选择器的规则列表，应包含数据库中所有已保存的规则，且默认规则应被正确标识。
+
+**Validates: Requirements 1.7, 1.8, 1.9, 9.8**
 
 ## Error Handling
 

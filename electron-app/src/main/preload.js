@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     list: () => ipcRenderer.invoke('rule:list'),
     // 获取规则
     get: (id) => ipcRenderer.invoke('rule:get', id),
+    // 获取默认规则
+    getDefault: () => ipcRenderer.invoke('rule:getDefault'),
     // 保存规则
     save: (rule) => ipcRenderer.invoke('rule:save', rule),
     // 删除规则

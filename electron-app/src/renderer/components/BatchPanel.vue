@@ -63,11 +63,13 @@
     <div class="rule-selector" v-if="files.length > 0">
       <label>使用规则：</label>
       <select v-model="selectedRuleId" :disabled="isProcessing">
-        <option value="">默认规则</option>
         <option v-for="rule in rules" :key="rule.id" :value="rule.id">
-          {{ rule.name }}
+          {{ rule.name }}{{ rule.isDefault ? ' (默认)' : '' }}
         </option>
       </select>
+      <span class="current-rule-hint" v-if="selectedRuleName">
+        当前: {{ selectedRuleName }}
+      </span>
     </div>
 
     <!-- 进度条 -->
@@ -159,6 +161,11 @@ export default {
       return files.value.some(f => f.status === 'error')
     })
 
+    const selectedRuleName = computed(() => {
+      const rule = rules.value.find(r => r.id === selectedRuleId.value)
+      return rule ? rule.name : ''
+    })
+
     const getFileIcon = (type) => {
       switch (type) {
         case 'doc':
@@ -174,6 +181,13 @@ export default {
     const loadRules = async () => {
       try {
         rules.value = await window.electronAPI.rule.list()
+        // 获取默认规则并选中
+        const defaultRule = await window.electronAPI.rule.getDefault()
+        if (defaultRule) {
+          selectedRuleId.value = defaultRule.id
+        } else if (rules.value.length > 0) {
+          selectedRuleId.value = rules.value[0].id
+        }
       } catch (error) {
         console.error('加载规则失败:', error)
       }
@@ -321,6 +335,7 @@ export default {
       files,
       rules,
       selectedRuleId,
+      selectedRuleName,
       currentTask,
       results,
       isProcessing,
@@ -565,6 +580,12 @@ export default {
   border: 1px solid #d9d9d9;
   border-radius: 4px;
   font-size: 14px;
+}
+
+.current-rule-hint {
+  font-size: 12px;
+  color: #1890ff;
+  margin-left: 8px;
 }
 
 .progress-section {
