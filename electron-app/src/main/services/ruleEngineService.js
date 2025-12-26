@@ -199,6 +199,34 @@ function importRules(jsonStr) {
 }
 
 /**
+ * 迁移旧格式数据到新格式
+ * @param {Object} oldPatterns - 旧格式模式配置
+ * @returns {Object} 新格式模式配置
+ */
+function migratePatterns(oldPatterns) {
+  if (!oldPatterns || typeof oldPatterns !== 'object') {
+    return getDefaultPatterns()
+  }
+  
+  // 如果已经是新格式（有 levels 数组），直接返回
+  if (oldPatterns.levels && Array.isArray(oldPatterns.levels)) {
+    return oldPatterns
+  }
+  
+  // 转换旧格式到新格式
+  return {
+    levels: [
+      { name: '一级题号', patterns: oldPatterns.level1 || [] },
+      { name: '二级题号', patterns: oldPatterns.level2 || [] },
+      { name: '三级题号', patterns: oldPatterns.level3 || [] }
+    ],
+    score: oldPatterns.score || [],
+    bracket: oldPatterns.bracket || [],
+    underline: oldPatterns.underline || []
+  }
+}
+
+/**
  * 验证并规范化模式配置
  * @param {Object} patterns - 模式配置
  * @returns {Object} 规范化后的模式配置
@@ -208,16 +236,38 @@ function validatePatterns(patterns) {
     return getDefaultPatterns()
   }
   
+  // 先迁移旧格式
+  const migrated = migratePatterns(patterns)
+  
+  // 验证新格式
   const validated = {
-    level1: validatePatternArray(patterns.level1),
-    level2: validatePatternArray(patterns.level2),
-    level3: validatePatternArray(patterns.level3),
-    score: validatePatternArray(patterns.score),
-    bracket: validatePatternArray(patterns.bracket),
-    underline: validatePatternArray(patterns.underline)
+    levels: validateLevelsArray(migrated.levels),
+    score: validatePatternArray(migrated.score),
+    bracket: validatePatternArray(migrated.bracket),
+    underline: validatePatternArray(migrated.underline)
   }
   
   return validated
+}
+
+/**
+ * 验证级别数组
+ * @param {Array} levels - 级别数组
+ * @returns {Array} 验证后的级别数组
+ */
+function validateLevelsArray(levels) {
+  if (!Array.isArray(levels) || levels.length === 0) {
+    return [
+      { name: '一级题号', patterns: [] },
+      { name: '二级题号', patterns: [] },
+      { name: '三级题号', patterns: [] }
+    ]
+  }
+  
+  return levels.map((level, index) => ({
+    name: level.name || `${index + 1}级题号`,
+    patterns: validatePatternArray(level.patterns)
+  }))
 }
 
 /**
@@ -241,40 +291,19 @@ function validatePatternArray(arr) {
 }
 
 /**
- * 获取默认模式配置
+ * 获取默认模式配置（新格式）
  * @returns {Object} 默认模式配置
  */
 function getDefaultPatterns() {
   return {
-    level1: [
-      '^[一二三四五六七八九十]+[、．.]',
-      '^\\d+[、．.]'
+    levels: [
+      { name: '一级题号', patterns: [] },
+      { name: '二级题号', patterns: [] },
+      { name: '三级题号', patterns: [] }
     ],
-    level2: [
-      '^\\d+[.．]',
-      '^[（(]\\d+[)）]',
-      '^[①②③④⑤⑥⑦⑧⑨⑩]'
-    ],
-    level3: [
-      '^[（(]\\d+[)）]',
-      '^[a-z][.．)]',
-      '^[①②③④⑤⑥⑦⑧⑨⑩]'
-    ],
-    score: [
-      '[（(【\\[]\\s*(\\d+)\\s*分\\s*[)）\\]】]',
-      '共\\s*(\\d+)\\s*分',
-      '(\\d+)\\s*分'
-    ],
-    bracket: [
-      '[（(][^)）]*[)）]',
-      '[【\\[][^\\]】]*[\\]】]',
-      '\\{[^}]*\\}'
-    ],
-    underline: [
-      '_{2,}',
-      '—{2,}',
-      '＿{2,}'
-    ]
+    score: [],
+    bracket: [],
+    underline: []
   }
 }
 
@@ -312,5 +341,6 @@ module.exports = {
   importRules,
   copyRule,
   getDefaultPatterns,
-  validatePatterns
+  validatePatterns,
+  migratePatterns
 }

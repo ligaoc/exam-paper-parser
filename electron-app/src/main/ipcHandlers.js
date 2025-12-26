@@ -127,6 +127,7 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
     let contentBlocks = []
     
     let images = []
+    let styledParagraphs = []
     
     // 根据文件类型选择解析器
     if (ext === 'docx' || ext === 'doc') {
@@ -137,6 +138,7 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
       tables = result.tables || []
       contentBlocks = result.contentBlocks || []
       images = result.images || []
+      styledParagraphs = result.styledParagraphs || []
     } else if (ext === 'pdf') {
       const result = await pdfParser.parse(filePath)
       content = result.text
@@ -149,7 +151,21 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
     
     // 提取结构
     const startTime = Date.now()
-    const extracted = structureExtractor.extract(content, rule)
+    let extracted
+    
+    // 对于 DOCX 文件，优先使用带样式的智能识别（会自动排除表格内容）
+    if ((ext === 'docx' || ext === 'doc') && styledParagraphs.length > 0) {
+      // 使用智能识别（基于字号+正则，自动排除表格）
+      const { questions } = structureExtractor.extractWithStyles(styledParagraphs, rule)
+      extracted = {
+        questions,
+        brackets: structureExtractor.extractBrackets ? structureExtractor.extractBrackets(content, rule?.patterns || {}) : [],
+        underlines: structureExtractor.extractUnderlines ? structureExtractor.extractUnderlines(content, rule?.patterns || {}) : []
+      }
+    } else {
+      // PDF 或其他格式使用旧方法
+      extracted = structureExtractor.extract(content, rule)
+    }
     const parseTime = Date.now() - startTime
     
     // 构建结果

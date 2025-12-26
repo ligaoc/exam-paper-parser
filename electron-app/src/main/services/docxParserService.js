@@ -149,15 +149,19 @@ async function parseDocx(filePath) {
   // 构建有序内容块（新增）
   const contentBlocks = await buildContentBlocks(filePath)
   
+  // 提取带样式信息的段落（用于智能层级识别）
+  const styledParagraphs = await extractStyledParagraphs(filePath)
+  
   return {
     text,
     html,
     paragraphs,
     headers,
     footers,
-    tables,           // 新增：表格数组
-    images,           // 新增：图片数组
-    contentBlocks,    // 新增：有序内容块
+    tables,           // 表格数组
+    images,           // 图片数组
+    contentBlocks,    // 有序内容块
+    styledParagraphs, // 带样式信息的段落（字号、粗体等）
     messages: textResult.messages.concat(htmlResult.messages)
   }
 }
@@ -1146,6 +1150,118 @@ function getImagePositionsFromXml(documentXml) {
 }
 
 /**
+ * 提取带样式信息的段落
+ * 包含字号、粗体等格式信息，用于智能层级识别
+ * @param {string} filePath - DOCX 文件路径
+ * @returns {Promise<Array>} 带样式的段落数组
+ */
+async function extractStyledParagraphs(filePath) {
+  const styledParagraphs = []
+  
+  try {
+    const AdmZip = require('adm-zip')
+    const zip = new AdmZip(filePath)
+    
+    // 读取 word/document.xml
+    const documentEntry = zip.getEntry('word/document.xml')
+    if (!documentEntry) {
+      console.warn('未找到 word/document.xml')
+      return styledParagraphs
+    }
+    
+    const documentXml = zip.readAsText(documentEntry)
+    
+    // 提取 <w:body> 内容
+    const bodyMatch = documentXml.match(/<w:body[^>]*>([\s\S]*)<\/w:body>/)
+    if (!bodyMatch) {
+      return styledParagraphs
+    }
+    
+    const bodyXml = bodyMatch[1]
+    
+    // 找出所有表格的位置范围（排除表格内的段落）
+    const tableRanges = []
+    const tableRegex = /<w:tbl[^>]*>[\s\S]*?<\/w:tbl>/g
+    let tableMatch
+    while ((tableMatch = tableRegex.exec(bodyXml)) !== null) {
+      tableRanges.push({
+        start: tableMatch.index,
+        end: tableMatch.index + tableMatch[0].length
+      })
+    }
+    
+    // 辅助函数：检查位置是否在表格内
+    function isInsideTable(position) {
+      for (const range of tableRanges) {
+        if (position >= range.start && position < range.end) {
+          return true
+        }
+      }
+      return false
+    }
+    
+    // 解析所有段落
+    const paragraphRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g
+    let pMatch
+    let paragraphIndex = 0
+    
+    while ((pMatch = paragraphRegex.exec(bodyXml)) !== null) {
+      const pXml = pMatch[0]
+      const position = pMatch.index
+      
+      // 跳过表格内的段落
+      if (isInsideTable(position)) {
+        continue
+      }
+      
+      // 提取文本内容
+      const textMatches = pXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || []
+      const text = textMatches.map(t => {
+        const m = t.match(/<w:t[^>]*>([^<]*)<\/w:t>/)
+        return m ? decodeXmlEntities(m[1]) : ''
+      }).join('')
+      
+      // 跳过空段落
+      if (!text.trim()) {
+        continue
+      }
+      
+      // 提取字号（w:sz 的值是半点，需要除以2）
+      const szMatch = pXml.match(/<w:sz\s+w:val="(\d+)"/)
+      const fontSize = szMatch ? parseInt(szMatch[1], 10) / 2 : null
+      
+      // 提取字号（也检查 w:szCs，某些文档用这个）
+      const szCsMatch = pXml.match(/<w:szCs\s+w:val="(\d+)"/)
+      const fontSizeCs = szCsMatch ? parseInt(szCsMatch[1], 10) / 2 : null
+      
+      // 使用较大的字号
+      const finalFontSize = fontSize || fontSizeCs || 10.5 // 默认字号约10.5pt
+      
+      // 检查是否粗体
+      const isBold = /<w:b(?:\s|\/|>)/.test(pXml) && !/<w:b\s+w:val="(?:false|0)"/.test(pXml)
+      
+      // 检查段落样式
+      const pStyleMatch = pXml.match(/<w:pStyle\s+w:val="([^"]*)"/)
+      const paragraphStyle = pStyleMatch ? pStyleMatch[1] : null
+      
+      styledParagraphs.push({
+        index: paragraphIndex++,
+        text: text.trim(),
+        fontSize: finalFontSize,
+        isBold,
+        paragraphStyle,
+        // 用于排序的复合键：粗体优先，然后字号大的优先
+        sortKey: (isBold ? 1000 : 0) + finalFontSize
+      })
+    }
+  } catch (error) {
+    console.warn('提取带样式段落失败:', error.message)
+  }
+  
+  return styledParagraphs
+}
+
+/**
  * 检查文件是否为支持的 Word 格式
  * @param {string} filePath - 文件路径
  */
@@ -1159,6 +1275,7 @@ module.exports = {
   parseDocx,
   parseParagraphs,
   extractHeadersFooters,
+  extractStyledParagraphs,
   isSupported,
   // 表格数据结构工厂函数
   createCell,

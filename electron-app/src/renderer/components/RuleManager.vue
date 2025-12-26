@@ -59,7 +59,8 @@
     <el-dialog 
       v-model="dialogVisible" 
       :title="isEditing ? '编辑规则' : '新建规则'"
-      width="700px"
+      width="750px"
+      top="5vh"
     >
       <el-form :model="currentRule" label-width="100px">
         <el-form-item label="规则名称">
@@ -74,26 +75,60 @@
           />
         </el-form-item>
         
-        <el-divider content-position="left">识别模式配置</el-divider>
+        <el-divider content-position="left">题号级别配置</el-divider>
+        
+        <!-- 动态题号级别 -->
+        <div class="levels-section">
+          <div 
+            v-for="(level, index) in currentRule.patterns.levels" 
+            :key="index"
+            class="level-item"
+          >
+            <div class="level-header">
+              <span class="level-title">{{ level.name }}</span>
+              <el-button 
+                v-if="currentRule.patterns.levels.length > 1"
+                type="danger" 
+                text 
+                size="small"
+                @click="removeLevel(index)"
+              >
+                <el-icon><Delete /></el-icon>
+                删除级别
+              </el-button>
+            </div>
+            <PatternSelector 
+              v-model="level.patterns" 
+              category="question"
+            />
+          </div>
+          
+          <el-button type="primary" text @click="addLevel">
+            <el-icon><Plus /></el-icon>
+            添加题号级别
+          </el-button>
+        </div>
+        
+        <el-divider content-position="left">其他模式配置</el-divider>
         
         <el-collapse v-model="activeCollapse">
-          <el-collapse-item title="一级题号模式" name="level1">
-            <PatternEditor v-model="currentRule.patterns.level1" />
-          </el-collapse-item>
-          <el-collapse-item title="二级题号模式" name="level2">
-            <PatternEditor v-model="currentRule.patterns.level2" />
-          </el-collapse-item>
-          <el-collapse-item title="三级题号模式" name="level3">
-            <PatternEditor v-model="currentRule.patterns.level3" />
-          </el-collapse-item>
           <el-collapse-item title="分数模式" name="score">
-            <PatternEditor v-model="currentRule.patterns.score" />
+            <PatternSelector 
+              v-model="currentRule.patterns.score" 
+              category="score"
+            />
           </el-collapse-item>
           <el-collapse-item title="括号模式" name="bracket">
-            <PatternEditor v-model="currentRule.patterns.bracket" />
+            <PatternSelector 
+              v-model="currentRule.patterns.bracket" 
+              category="bracket"
+            />
           </el-collapse-item>
           <el-collapse-item title="下划线模式" name="underline">
-            <PatternEditor v-model="currentRule.patterns.underline" />
+            <PatternSelector 
+              v-model="currentRule.patterns.underline" 
+              category="underline"
+            />
           </el-collapse-item>
         </el-collapse>
       </el-form>
@@ -109,23 +144,28 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Upload } from '@element-plus/icons-vue'
-import PatternEditor from './PatternEditor.vue'
+import { Plus, Upload, Delete } from '@element-plus/icons-vue'
+import PatternSelector from './PatternSelector.vue'
 
 const rules = ref([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const isEditing = ref(false)
-const activeCollapse = ref(['level1'])
+const activeCollapse = ref(['score'])
+
+// 中文数字映射
+const chineseNumbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
 
 const currentRule = reactive({
   id: null,
   name: '',
   description: '',
   patterns: {
-    level1: [],
-    level2: [],
-    level3: [],
+    levels: [
+      { name: '一级题号', patterns: [] },
+      { name: '二级题号', patterns: [] },
+      { name: '三级题号', patterns: [] }
+    ],
     score: [],
     bracket: [],
     underline: []
@@ -158,13 +198,37 @@ function showCreateDialog() {
 // 编辑规则
 function editRule(rule) {
   isEditing.value = true
+  
+  // 迁移旧格式数据
+  const patterns = migratePatterns(rule.patterns)
+  
   Object.assign(currentRule, {
     id: rule.id,
     name: rule.name,
     description: rule.description,
-    patterns: JSON.parse(JSON.stringify(rule.patterns))
+    patterns: JSON.parse(JSON.stringify(patterns))
   })
   dialogVisible.value = true
+}
+
+// 迁移旧格式数据到新格式
+function migratePatterns(oldPatterns) {
+  // 如果已经是新格式，直接返回
+  if (oldPatterns.levels) {
+    return oldPatterns
+  }
+  
+  // 转换旧格式到新格式
+  return {
+    levels: [
+      { name: '一级题号', patterns: oldPatterns.level1 || [] },
+      { name: '二级题号', patterns: oldPatterns.level2 || [] },
+      { name: '三级题号', patterns: oldPatterns.level3 || [] }
+    ],
+    score: oldPatterns.score || [],
+    bracket: oldPatterns.bracket || [],
+    underline: oldPatterns.underline || []
+  }
 }
 
 // 保存规则
@@ -242,6 +306,28 @@ async function importRules(file) {
   return false // 阻止默认上传行为
 }
 
+// 添加题号级别
+function addLevel() {
+  const levelCount = currentRule.patterns.levels.length
+  const levelName = levelCount < 10 
+    ? `${chineseNumbers[levelCount]}级题号` 
+    : `${levelCount + 1}级题号`
+  
+  currentRule.patterns.levels.push({
+    name: levelName,
+    patterns: []
+  })
+}
+
+// 删除题号级别
+function removeLevel(index) {
+  if (currentRule.patterns.levels.length <= 1) {
+    ElMessage.warning('至少需要保留一个题号级别')
+    return
+  }
+  currentRule.patterns.levels.splice(index, 1)
+}
+
 // 重置当前规则
 function resetCurrentRule() {
   Object.assign(currentRule, {
@@ -249,12 +335,14 @@ function resetCurrentRule() {
     name: '',
     description: '',
     patterns: {
-      level1: ['^[一二三四五六七八九十]+[、．.]', '^\\d+[、．.]'],
-      level2: ['^\\d+[.．]', '^[（(]\\d+[)）]'],
-      level3: ['^[（(]\\d+[)）]', '^[a-z][.．)]'],
-      score: ['[（(【\\[]\\s*(\\d+)\\s*分\\s*[)）\\]】]', '(\\d+)\\s*分'],
-      bracket: ['[（(][^)）]*[)）]', '[【\\[][^\\]】]*[\\]】]'],
-      underline: ['_{2,}', '—{2,}']
+      levels: [
+        { name: '一级题号', patterns: [] },
+        { name: '二级题号', patterns: [] },
+        { name: '三级题号', patterns: [] }
+      ],
+      score: [],
+      bracket: [],
+      underline: []
     }
   })
 }
@@ -265,6 +353,7 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleString('zh-CN')
 }
 </script>
+
 
 <style scoped>
 .rule-manager {
@@ -286,5 +375,29 @@ function formatDate(dateStr) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.levels-section {
+  padding: 0 10px;
+}
+
+.level-item {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.level-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.level-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
 }
 </style>
