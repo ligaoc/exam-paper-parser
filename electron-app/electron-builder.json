@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.electron.vue.template",
+  "productName": "Electron App",
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist/**/*",
+    "package.json",
+    "node_modules/sql.js/dist/sql-wasm.wasm"
+  ],
+  "extraMetadata": {
+    "main": "dist/main/main.js"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "dir",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "build/icon.ico",
+    "artifactName": "${productName}-${version}-Setup.${ext}",
+    "signAndEditExecutable": false,
+    "rfc3161TimeStampServer": null
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Electron App",
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "installerHeaderIcon": "build/icon.ico"
+  },
+  "mac": {
+    "target": ["dmg"],
+    "icon": "build/icon.icns",
+    "artifactName": "${productName}-${version}.${ext}"
+  },
+  "linux": {
+    "target": ["AppImage"],
+    "icon": "build/icon.png",
+    "artifactName": "${productName}-${version}.${ext}"
+  }
+}

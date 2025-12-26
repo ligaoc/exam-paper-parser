@@ -1,0 +1,71 @@
+{
+  "name": "electron-vue-template",
+  "version": "1.0.0",
+  "description": "Electron + Vue 3 桌面应用模板",
+  "main": "src/main/main.js",
+  "author": "Your Name",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && npm run build:main",
+    "build:main": "node scripts/build-main.js",
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "electron:build": "npm run build && electron-builder --config electron-builder.json",
+    "electron:preview": "npm run build && electron .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "pack": "npm run build && electron-builder --dir",
+    "package": "npm run build && electron-builder",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "cors": "^2.8.5",
+    "docx": "^8.5.0",
+    "element-plus": "^2.4.0",
+    "express": "^5.2.1",
+    "mammoth": "^1.6.0",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^1.1.1",
+    "sql.js": "^1.10.0",
+    "uuid": "^9.0.0",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.0",
+    "concurrently": "^8.2.0",
+    "cross-env": "^7.0.3",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.0",
+    "fast-check": "^3.14.0",
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.electron.vue.template",
+    "productName": "Electron App",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "dist/main/main.js"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Electron App"
+    }
+  }
+}
