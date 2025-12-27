@@ -285,7 +285,8 @@ function validatePatterns(patterns) {
   const validated = {
     levels: validateLevelsArrayWithScore(migratedScores.levels),
     bracket: validatePatternArray(migratedScores.bracket),
-    underline: validatePatternArray(migratedScores.underline)
+    underline: validatePatternArray(migratedScores.underline),
+    ignorePatterns: validateIgnorePatterns(patterns.ignorePatterns || [])
   }
   
   return validated
@@ -333,7 +334,77 @@ function validatePatternArray(arr) {
 }
 
 /**
- * 获取默认模式配置（新格式，包含级别分数模式）
+ * 验证忽略模式数组
+ * 支持两种格式：
+ * 1. 简单字符串（作为关键词或正则）
+ * 2. 对象格式 { pattern, type, description }
+ * @param {Array} ignorePatterns - 忽略模式数组
+ * @returns {Array} 验证后的忽略模式数组
+ */
+function validateIgnorePatterns(ignorePatterns) {
+  if (!Array.isArray(ignorePatterns)) return []
+  
+  return ignorePatterns
+    .map(item => {
+      // 处理简单字符串格式
+      if (typeof item === 'string') {
+        const trimmed = item.trim()
+        if (!trimmed) return null
+        
+        // 尝试作为正则验证
+        try {
+          new RegExp(trimmed)
+          return {
+            pattern: trimmed,
+            type: 'regex',
+            description: ''
+          }
+        } catch (e) {
+          // 正则无效，作为关键词处理
+          return {
+            pattern: trimmed,
+            type: 'keyword',
+            description: ''
+          }
+        }
+      }
+      
+      // 处理对象格式
+      if (item && typeof item === 'object') {
+        const pattern = (item.pattern || '').trim()
+        if (!pattern) return null
+        
+        const type = item.type === 'keyword' ? 'keyword' : 'regex'
+        
+        // 如果是正则类型，验证正则语法
+        if (type === 'regex') {
+          try {
+            new RegExp(pattern)
+          } catch (e) {
+            console.warn('无效的忽略模式正则表达式:', pattern)
+            // 正则无效，降级为关键词
+            return {
+              pattern: pattern,
+              type: 'keyword',
+              description: item.description || ''
+            }
+          }
+        }
+        
+        return {
+          pattern: pattern,
+          type: type,
+          description: item.description || ''
+        }
+      }
+      
+      return null
+    })
+    .filter(Boolean)
+}
+
+/**
+ * 获取默认模式配置（新格式，包含级别分数模式和忽略模式）
  * @returns {Object} 默认模式配置
  */
 function getDefaultPatterns() {
@@ -344,7 +415,8 @@ function getDefaultPatterns() {
       { name: '三级题号', patterns: [], scorePatterns: [] }
     ],
     bracket: [],
-    underline: []
+    underline: [],
+    ignorePatterns: []
   }
 }
 
@@ -383,6 +455,7 @@ module.exports = {
   copyRule,
   getDefaultPatterns,
   validatePatterns,
+  validateIgnorePatterns,
   migratePatterns,
   migrateToLevelScorePatterns,
   validateLevelsArrayWithScore

@@ -70,11 +70,11 @@ const DEFAULT_PATTERNS = {
  * 
  * @param {Array} styledParagraphs - 带样式的段落数组（来自 docxParserService）
  * @param {Object} [rule] - 自定义规则
- * @returns {Object} { questions, levelMapping }
+ * @returns {Object} { questions, levelMapping, ignoredParagraphs }
  */
 function extractWithStyles(styledParagraphs, rule) {
   if (!styledParagraphs || styledParagraphs.length === 0) {
-    return { questions: [], levelMapping: {} }
+    return { questions: [], levelMapping: {}, ignoredParagraphs: [] }
   }
   
   const patterns = rule?.patterns?.questionPatterns || DEFAULT_QUESTION_PATTERNS
@@ -82,11 +82,17 @@ function extractWithStyles(styledParagraphs, rule) {
   // 获取级别配置（包含分数模式）
   const levelConfigs = rule?.patterns?.levels || []
   
+  // 获取忽略模式
+  const ignorePatterns = rule?.patterns?.ignorePatterns || []
+  
+  // ========== 第零步：过滤需要忽略的段落 ==========
+  const { filtered: filteredParagraphs, ignored: ignoredParagraphs } = filterParagraphs(styledParagraphs, ignorePatterns)
+  
   // ========== 第一步：按字号分组 ==========
   // sortKey = (isBold ? 1000 : 0) + fontSize
   const fontSizeGroups = new Map() // sortKey -> { paragraphs: [], patternOrder: Map }
   
-  styledParagraphs.forEach((p, idx) => {
+  filteredParagraphs.forEach((p, idx) => {
     if (!fontSizeGroups.has(p.sortKey)) {
       fontSizeGroups.set(p.sortKey, {
         sortKey: p.sortKey,
@@ -210,7 +216,7 @@ function extractWithStyles(styledParagraphs, rule) {
   // ========== 第四步：构建树形结构 ==========
   const questions = buildQuestionTree(allQuestions)
   
-  return { questions, levelMapping }
+  return { questions, levelMapping, ignoredParagraphs }
 }
 
 /**
@@ -307,6 +313,83 @@ function extractScoreByLevel(text, scorePatterns) {
 // ============================================
 // 工具函数
 // ============================================
+
+/**
+ * 检查段落是否应该被忽略
+ * @param {string} text - 段落文本
+ * @param {Array} ignorePatterns - 忽略模式数组
+ * @returns {Object} { ignored: boolean, matchedPattern: string|null }
+ */
+function shouldIgnoreParagraph(text, ignorePatterns) {
+  if (!text || !ignorePatterns || !Array.isArray(ignorePatterns) || ignorePatterns.length === 0) {
+    return { ignored: false, matchedPattern: null }
+  }
+  
+  const trimmedText = text.trim()
+  if (!trimmedText) {
+    return { ignored: false, matchedPattern: null }
+  }
+  
+  for (const item of ignorePatterns) {
+    if (!item || !item.pattern) continue
+    
+    try {
+      if (item.type === 'keyword') {
+        // 关键词匹配：检查文本是否包含关键词
+        if (trimmedText.includes(item.pattern)) {
+          return { ignored: true, matchedPattern: item.pattern }
+        }
+      } else {
+        // 正则匹配
+        const regex = new RegExp(item.pattern)
+        if (regex.test(trimmedText)) {
+          return { ignored: true, matchedPattern: item.pattern }
+        }
+      }
+    } catch (e) {
+      console.warn('忽略模式匹配错误:', item.pattern, e.message)
+    }
+  }
+  
+  return { ignored: false, matchedPattern: null }
+}
+
+/**
+ * 过滤段落列表，分离出需要忽略的段落
+ * @param {Array} paragraphs - 段落数组
+ * @param {Array} ignorePatterns - 忽略模式数组
+ * @returns {Object} { filtered: Array, ignored: Array }
+ */
+function filterParagraphs(paragraphs, ignorePatterns) {
+  if (!paragraphs || !Array.isArray(paragraphs)) {
+    return { filtered: [], ignored: [] }
+  }
+  
+  if (!ignorePatterns || !Array.isArray(ignorePatterns) || ignorePatterns.length === 0) {
+    return { filtered: paragraphs, ignored: [] }
+  }
+  
+  const filtered = []
+  const ignored = []
+  
+  paragraphs.forEach((p, index) => {
+    const text = typeof p === 'string' ? p : (p.text || '')
+    const result = shouldIgnoreParagraph(text, ignorePatterns)
+    
+    if (result.ignored) {
+      ignored.push({
+        text: text,
+        matchedPattern: result.matchedPattern,
+        paragraphIndex: index,
+        originalParagraph: p
+      })
+    } else {
+      filtered.push(p)
+    }
+  })
+  
+  return { filtered, ignored }
+}
 
 /**
  * 将模式转换为正则表达式数组
@@ -604,6 +687,10 @@ function detectScores(text) {
 module.exports = {
   // 新版智能识别
   extractWithStyles,
+  
+  // 段落忽略功能
+  shouldIgnoreParagraph,
+  filterParagraphs,
   
   // 按级别提取分数
   extractScoreByLevel,

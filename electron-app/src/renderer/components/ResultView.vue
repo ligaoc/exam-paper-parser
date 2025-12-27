@@ -90,6 +90,30 @@
               </el-descriptions-item>
             </el-descriptions>
             
+            <!-- 忽略段落统计 -->
+            <div v-if="ignoredParagraphs.length > 0" class="ignored-stats">
+              <h4>
+                <el-icon><Warning /></el-icon>
+                已忽略的段落 ({{ ignoredParagraphs.length }})
+              </h4>
+              <el-collapse>
+                <el-collapse-item title="点击查看被忽略的文本">
+                  <div class="ignored-list">
+                    <div 
+                      v-for="(item, index) in ignoredParagraphs" 
+                      :key="index" 
+                      class="ignored-item"
+                    >
+                      <div class="ignored-text">{{ item.text }}</div>
+                      <el-tag size="small" type="info">
+                        匹配: {{ item.matchedPattern }}
+                      </el-tag>
+                    </div>
+                  </div>
+                </el-collapse-item>
+              </el-collapse>
+            </div>
+            
             <!-- 按级别统计 -->
             <div v-if="levelStats.length > 0" class="level-stats">
               <h4>按级别统计</h4>
@@ -239,6 +263,7 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Download } from '@element-plus/icons-vue'
+import { Warning } from '@element-plus/icons-vue'
 
 const props = defineProps({
   result: {
@@ -263,6 +288,11 @@ const contentBlockStats = computed(() => {
 const treeData = computed(() => {
   if (!props.result?.structure) return []
   return props.result.structure
+})
+
+// 忽略的段落
+const ignoredParagraphs = computed(() => {
+  return props.result?.ignoredParagraphs || []
 })
 
 const treeProps = {
@@ -501,6 +531,52 @@ async function exportResult() {
 .level-stats h4 {
   margin-bottom: 10px;
   color: #303133;
+}
+
+.ignored-stats {
+  margin-top: 20px;
+  padding: 16px;
+  background: #fef0f0;
+  border-radius: 4px;
+  border: 1px solid #fde2e2;
+}
+
+.ignored-stats h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #f56c6c;
+  font-size: 14px;
+}
+
+.ignored-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ignored-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  border: 1px solid #ebeef5;
+}
+
+.ignored-item:last-child {
+  margin-bottom: 0;
+}
+
+.ignored-text {
+  flex: 1;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
 .score-tree-node {

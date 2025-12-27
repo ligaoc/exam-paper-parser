@@ -126,6 +126,14 @@
         <el-divider content-position="left">其他模式配置</el-divider>
         
         <el-collapse v-model="activeCollapse">
+          <el-collapse-item title="忽略解析文本" name="ignore">
+            <div class="ignore-section-tip">
+              配置需要忽略的文本模式，匹配的段落将不会被识别为题目
+            </div>
+            <IgnorePatternSelector 
+              v-model="currentRule.patterns.ignorePatterns"
+            />
+          </el-collapse-item>
           <el-collapse-item title="括号模式" name="bracket">
             <PatternSelector 
               v-model="currentRule.patterns.bracket" 
@@ -154,12 +162,13 @@ import { ref, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Upload, Delete } from '@element-plus/icons-vue'
 import PatternSelector from './PatternSelector.vue'
+import IgnorePatternSelector from './IgnorePatternSelector.vue'
 
 const rules = ref([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const isEditing = ref(false)
-const activeCollapse = ref(['bracket'])
+const activeCollapse = ref(['ignore'])
 
 // 中文数字映射
 const chineseNumbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
@@ -175,7 +184,8 @@ const currentRule = reactive({
       { name: '三级题号', patterns: [], scorePatterns: [] }
     ],
     bracket: [],
-    underline: []
+    underline: [],
+    ignorePatterns: []
   }
 })
 
@@ -225,9 +235,12 @@ function migratePatterns(oldPatterns) {
       Array.isArray(oldPatterns.levels) && 
       oldPatterns.levels.length > 0 &&
       oldPatterns.levels[0].scorePatterns !== undefined) {
-    // 确保没有全局 score 字段
+    // 确保没有全局 score 字段，并确保有 ignorePatterns 字段
     const { score, ...rest } = oldPatterns
-    return rest
+    return {
+      ...rest,
+      ignorePatterns: rest.ignorePatterns || []
+    }
   }
   
   // 如果有 levels 但没有 scorePatterns，需要迁移
@@ -242,7 +255,8 @@ function migratePatterns(oldPatterns) {
     return {
       levels: newLevels,
       bracket: oldPatterns.bracket || [],
-      underline: oldPatterns.underline || []
+      underline: oldPatterns.underline || [],
+      ignorePatterns: oldPatterns.ignorePatterns || []
     }
   }
   
@@ -255,7 +269,8 @@ function migratePatterns(oldPatterns) {
       { name: '三级题号', patterns: oldPatterns.level3 || [], scorePatterns: [...globalScorePatterns] }
     ],
     bracket: oldPatterns.bracket || [],
-    underline: oldPatterns.underline || []
+    underline: oldPatterns.underline || [],
+    ignorePatterns: oldPatterns.ignorePatterns || []
   }
 }
 
@@ -267,12 +282,16 @@ async function saveRule() {
   }
   
   try {
-    await window.electronAPI.rule.save({
+    // 使用 JSON.parse(JSON.stringify()) 深拷贝，移除 Vue reactive 的 Proxy
+    // 这样可以确保传递给 IPC 的是纯 JavaScript 对象，避免 "An object could not be cloned" 错误
+    const ruleData = JSON.parse(JSON.stringify({
       id: currentRule.id,
       name: currentRule.name,
       description: currentRule.description,
       patterns: currentRule.patterns
-    })
+    }))
+    
+    await window.electronAPI.rule.save(ruleData)
     
     ElMessage.success(isEditing.value ? '规则已更新' : '规则已创建')
     dialogVisible.value = false
@@ -370,7 +389,8 @@ function resetCurrentRule() {
         { name: '三级题号', patterns: [], scorePatterns: [] }
       ],
       bracket: [],
-      underline: []
+      underline: [],
+      ignorePatterns: []
     }
   })
 }
@@ -443,5 +463,14 @@ function formatDate(dateStr) {
   color: #606266;
   margin-bottom: 6px;
   font-weight: 500;
+}
+
+.ignore-section-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: #f4f4f5;
+  border-radius: 4px;
 }
 </style>

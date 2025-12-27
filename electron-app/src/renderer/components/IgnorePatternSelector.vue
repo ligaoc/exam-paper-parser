@@ -1,9 +1,9 @@
 <template>
-  <div class="pattern-selector">
+  <div class="ignore-pattern-selector">
     <!-- 下拉选择框 -->
     <el-select
       v-model="selectedPresetId"
-      placeholder="选择模式..."
+      placeholder="选择预设忽略模式..."
       filterable
       clearable
       @change="handlePresetSelect"
@@ -17,7 +17,9 @@
       >
         <div class="preset-option">
           <span class="preset-label">{{ preset.label }}</span>
-          <span class="preset-examples">{{ preset.examples.slice(0, 3).join(' ') }}</span>
+          <el-tag size="small" :type="preset.type === 'keyword' ? 'success' : 'primary'">
+            {{ preset.type === 'keyword' ? '关键词' : '正则' }}
+          </el-tag>
         </div>
       </el-option>
     </el-select>
@@ -25,21 +27,20 @@
     <!-- 已选模式列表 -->
     <div class="selected-patterns">
       <el-tag
-        v-for="(item, index) in selectedItems"
+        v-for="(item, index) in modelValue"
         :key="index"
         closable
-        :type="item.isCustom ? 'warning' : 'primary'"
+        :type="item.type === 'keyword' ? 'success' : 'primary'"
         @close="removePattern(index)"
         class="pattern-tag"
       >
-        <span v-if="item.isCustom" class="custom-label">自定义: </span>
-        <span class="pattern-display">{{ item.label }}</span>
-        <span v-if="!item.isCustom" class="pattern-examples">({{ item.examples.slice(0, 2).join(' ') }})</span>
+        <span class="pattern-type">[{{ item.type === 'keyword' ? '关键词' : '正则' }}]</span>
+        <span class="pattern-display">{{ item.pattern }}</span>
       </el-tag>
     </div>
 
     <!-- 自定义模式输入 -->
-    <div v-if="allowCustom" class="custom-input-section">
+    <div class="custom-input-section">
       <el-button 
         v-if="!showCustomInput" 
         type="primary" 
@@ -48,43 +49,42 @@
         @click="showCustomInput = true"
       >
         <el-icon><Plus /></el-icon>
-        添加自定义模式
+        添加自定义忽略模式
       </el-button>
       
-      <div v-else class="custom-input-row">
-        <el-input
-          v-model="customPattern"
-          placeholder="输入正则表达式"
-          size="small"
-          :class="{ 'is-error': customError }"
-          @keyup.enter="addCustomPattern"
-        />
-        <el-button type="primary" size="small" @click="addCustomPattern">添加</el-button>
-        <el-button size="small" @click="cancelCustomInput">取消</el-button>
+      <div v-else class="custom-input-form">
+        <div class="custom-input-row">
+          <el-select v-model="customType" size="small" style="width: 100px;">
+            <el-option label="关键词" value="keyword" />
+            <el-option label="正则" value="regex" />
+          </el-select>
+          <el-input
+            v-model="customPattern"
+            :placeholder="customType === 'keyword' ? '输入要忽略的关键词' : '输入正则表达式'"
+            size="small"
+            :class="{ 'is-error': customError }"
+            @keyup.enter="addCustomPattern"
+          />
+        </div>
+        <div class="custom-input-actions">
+          <el-button type="primary" size="small" @click="addCustomPattern">添加</el-button>
+          <el-button size="small" @click="cancelCustomInput">取消</el-button>
+        </div>
+        <div v-if="customError" class="error-message">{{ customError }}</div>
       </div>
-      <div v-if="customError" class="error-message">{{ customError }}</div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
-import { getPresetsByCategory, findPresetByRegex, validateRegex } from '../utils/patternPresets'
+import { getIgnorePresets } from '../utils/patternPresets'
 
 const props = defineProps({
   modelValue: {
     type: Array,
     default: () => []
-  },
-  category: {
-    type: String,
-    required: true,
-    validator: (value) => ['question', 'score', 'bracket', 'underline', 'ignore'].includes(value)
-  },
-  allowCustom: {
-    type: Boolean,
-    default: true
   }
 })
 
@@ -94,33 +94,12 @@ const emit = defineEmits(['update:modelValue'])
 const selectedPresetId = ref('')
 const showCustomInput = ref(false)
 const customPattern = ref('')
+const customType = ref('keyword')
 const customError = ref('')
 
-// 获取当前类别的可用预设
+// 获取可用预设
 const availablePresets = computed(() => {
-  return getPresetsByCategory(props.category)
-})
-
-// 将 modelValue 中的正则转换为显示项
-const selectedItems = computed(() => {
-  return props.modelValue.map(regex => {
-    const preset = findPresetByRegex(regex)
-    if (preset) {
-      return {
-        regex,
-        label: preset.label,
-        examples: preset.examples,
-        isCustom: false
-      }
-    } else {
-      return {
-        regex,
-        label: regex,
-        examples: [],
-        isCustom: true
-      }
-    }
-  })
+  return getIgnorePresets()
 })
 
 // 选择预设
@@ -128,8 +107,16 @@ function handlePresetSelect(presetId) {
   if (!presetId) return
   
   const preset = availablePresets.value.find(p => p.id === presetId)
-  if (preset && !props.modelValue.includes(preset.regex)) {
-    emit('update:modelValue', [...props.modelValue, preset.regex])
+  if (preset) {
+    // 检查是否已存在
+    const exists = props.modelValue.some(item => item.pattern === preset.pattern)
+    if (!exists) {
+      emit('update:modelValue', [...props.modelValue, {
+        pattern: preset.pattern,
+        type: preset.type,
+        description: preset.label
+      }])
+    }
   }
   
   // 清空选择框
@@ -147,21 +134,32 @@ function addCustomPattern() {
   customError.value = ''
   
   if (!customPattern.value.trim()) {
-    customError.value = '请输入正则表达式'
+    customError.value = '请输入忽略模式'
     return
   }
   
-  if (!validateRegex(customPattern.value)) {
-    customError.value = '正则表达式格式错误'
-    return
+  // 如果是正则类型，验证正则语法
+  if (customType.value === 'regex') {
+    try {
+      new RegExp(customPattern.value)
+    } catch (e) {
+      customError.value = '正则表达式格式错误'
+      return
+    }
   }
   
-  if (props.modelValue.includes(customPattern.value)) {
+  // 检查是否已存在
+  const exists = props.modelValue.some(item => item.pattern === customPattern.value)
+  if (exists) {
     customError.value = '该模式已存在'
     return
   }
   
-  emit('update:modelValue', [...props.modelValue, customPattern.value])
+  emit('update:modelValue', [...props.modelValue, {
+    pattern: customPattern.value,
+    type: customType.value,
+    description: ''
+  }])
   cancelCustomInput()
 }
 
@@ -169,13 +167,13 @@ function addCustomPattern() {
 function cancelCustomInput() {
   showCustomInput.value = false
   customPattern.value = ''
+  customType.value = 'keyword'
   customError.value = ''
 }
 </script>
 
-
 <style scoped>
-.pattern-selector {
+.ignore-pattern-selector {
   padding: 10px 0;
 }
 
@@ -190,11 +188,6 @@ function cancelCustomInput() {
   font-weight: 500;
 }
 
-.preset-examples {
-  color: #909399;
-  font-size: 12px;
-}
-
 .selected-patterns {
   display: flex;
   flex-wrap: wrap;
@@ -207,22 +200,24 @@ function cancelCustomInput() {
   max-width: 100%;
 }
 
-.custom-label {
-  color: #e6a23c;
-  font-weight: 500;
+.pattern-type {
+  color: #909399;
+  font-size: 11px;
+  margin-right: 4px;
 }
 
 .pattern-display {
   margin-right: 4px;
 }
 
-.pattern-examples {
-  color: #909399;
-  font-size: 11px;
-}
-
 .custom-input-section {
   margin-top: 10px;
+}
+
+.custom-input-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .custom-input-row {
@@ -235,10 +230,14 @@ function cancelCustomInput() {
   flex: 1;
 }
 
+.custom-input-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .error-message {
   color: #f56c6c;
   font-size: 12px;
-  margin-top: 4px;
 }
 
 .is-error :deep(.el-input__wrapper) {

@@ -161,15 +161,17 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
     // 对于 DOCX 和 PDF 文件，优先使用带样式的智能识别
     if (styledParagraphs.length > 0) {
       // 使用智能识别（基于字号+正则）
-      const { questions } = structureExtractor.extractWithStyles(styledParagraphs, rule)
+      const { questions, ignoredParagraphs } = structureExtractor.extractWithStyles(styledParagraphs, rule)
       extracted = {
         questions,
+        ignoredParagraphs: ignoredParagraphs || [],
         brackets: structureExtractor.extractBrackets ? structureExtractor.extractBrackets(content, rule?.patterns || {}) : [],
         underlines: structureExtractor.extractUnderlines ? structureExtractor.extractUnderlines(content, rule?.patterns || {}) : []
       }
     } else {
       // 降级到旧方法（纯正则匹配）
       extracted = structureExtractor.extract(content, rule)
+      extracted.ignoredParagraphs = []
     }
     const parseTime = Date.now() - startTime
     
@@ -183,6 +185,7 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
       filePath: filePath,
       fileType: ext,
       structure: extracted.questions,
+      ignoredParagraphs: extracted.ignoredParagraphs || [],
       headers: headers,
       footers: footers,
       tables: tables,
