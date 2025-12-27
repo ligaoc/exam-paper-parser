@@ -104,13 +104,12 @@ function extractWithStyles(styledParagraphs, rule) {
   
   // ========== 第二步：为每个字号组分配基础级别 ==========
   // 并记录每个字号组内的题号模式出现顺序
+  // 注意：只为实际包含题号的字号组分配级别
   let currentBaseLevel = 1
   const levelMapping = {} // 用于调试输出
   
   sortedGroups.forEach(group => {
-    group.baseLevel = currentBaseLevel
-    
-    // 扫描该组内所有段落，记录题号模式的出现顺序
+    // 先扫描该组内所有段落，记录题号模式的出现顺序
     let subLevelCounter = 0
     
     group.paragraphs.forEach(p => {
@@ -133,21 +132,32 @@ function extractWithStyles(styledParagraphs, rule) {
       }
     })
     
-    // 更新下一个字号组的基础级别
-    // 基础级别 + 该组内的子级别数量
     const subLevelCount = group.patternOrder.size
-    levelMapping[`${group.isBold ? '粗体' : ''}${group.fontSize}pt`] = {
-      baseLevel: currentBaseLevel,
-      subLevels: subLevelCount
-    }
     
-    currentBaseLevel += Math.max(1, subLevelCount)
+    // 只有当该字号组内有题号时，才分配级别
+    if (subLevelCount > 0) {
+      group.baseLevel = currentBaseLevel
+      
+      levelMapping[`${group.isBold ? '粗体' : ''}${group.fontSize}pt`] = {
+        baseLevel: currentBaseLevel,
+        subLevels: subLevelCount
+      }
+      
+      // 更新下一个字号组的基础级别
+      currentBaseLevel += subLevelCount
+    } else {
+      // 没有题号的字号组，不分配级别
+      group.baseLevel = null
+    }
   })
   
   // ========== 第三步：为每个段落分配最终级别 ==========
   const allQuestions = []
   
   sortedGroups.forEach(group => {
+    // 跳过没有题号的字号组
+    if (group.baseLevel === null) return
+    
     group.paragraphs.forEach(p => {
       const text = p.text.trim()
       if (!text) return
