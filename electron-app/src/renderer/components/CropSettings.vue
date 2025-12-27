@@ -4,181 +4,190 @@
       <h3>文档裁剪</h3>
     </div>
 
-    <!-- 文件选择 -->
-    <div class="file-section">
-      <div class="section-title">选择文件</div>
-      <div class="file-input">
-        <button class="btn btn-primary" @click="selectFile" :disabled="isProcessing">
-          <span class="icon">📁</span> 选择文件
-        </button>
-        <span class="file-name" v-if="selectedFile">{{ selectedFile.name }}</span>
-        <span class="file-hint" v-else>支持 .pdf, .docx 格式</span>
-      </div>
-    </div>
-
-    <!-- 页面信息 -->
-    <div class="page-info" v-if="pageInfo">
-      <div class="section-title">页面信息</div>
-      <div class="info-grid">
-        <div class="info-item">
-          <span class="label">页数:</span>
-          <span class="value">{{ pageInfo.pageCount }}</span>
-        </div>
-        <div class="info-item" v-if="pageInfo.pages && pageInfo.pages[0]">
-          <span class="label">尺寸:</span>
-          <span class="value">
-            {{ pageInfo.pages[0].width.toFixed(1) }} × {{ pageInfo.pages[0].height.toFixed(1) }} mm
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 边距设置 -->
-    <div class="margin-section">
-      <div class="section-title">边距设置 (mm)</div>
-      <div class="margin-preview">
-        <div class="preview-box">
-          <div class="margin-input top">
-            <input 
-              type="number" 
-              v-model.number="settings.top" 
-              min="0" 
-              max="500"
-              :disabled="isProcessing"
-            />
-            <span class="label">上</span>
+    <div class="crop-layout">
+      <!-- 左侧：设置区域 -->
+      <div class="settings-panel">
+        <!-- 文件选择 -->
+        <div class="file-section">
+          <div class="section-title">选择文件</div>
+          <div class="file-input">
+            <button class="btn btn-primary" @click="selectFile" :disabled="isProcessing">
+              <span class="icon">📁</span> 选择文件
+            </button>
+            <span class="file-name" v-if="selectedFile">{{ selectedFile.name }}</span>
+            <span class="file-hint" v-else>支持 .pdf, .docx 格式</span>
           </div>
-          <div class="margin-row">
-            <div class="margin-input left">
-              <input 
-                type="number" 
-                v-model.number="settings.left" 
-                min="0" 
-                max="500"
-                :disabled="isProcessing"
-              />
-              <span class="label">左</span>
-            </div>
-            <div class="page-preview">
-              <div class="page-content">
-                <div class="content-lines">
-                  <div class="line"></div>
-                  <div class="line"></div>
-                  <div class="line short"></div>
-                  <div class="line"></div>
-                  <div class="line short"></div>
-                </div>
+        </div>
+
+        <!-- 边距设置 -->
+        <div class="margin-section">
+          <div class="section-title">边距设置 (mm)</div>
+          <div class="margin-inputs">
+            <div class="margin-row">
+              <div class="margin-input">
+                <label>上</label>
+                <input 
+                  type="number" 
+                  v-model.number="settings.top" 
+                  min="0" 
+                  max="500"
+                  :disabled="isProcessing"
+                />
+              </div>
+              <div class="margin-input">
+                <label>下</label>
+                <input 
+                  type="number" 
+                  v-model.number="settings.bottom" 
+                  min="0" 
+                  max="500"
+                  :disabled="isProcessing"
+                />
               </div>
             </div>
-            <div class="margin-input right">
-              <input 
-                type="number" 
-                v-model.number="settings.right" 
-                min="0" 
-                max="500"
-                :disabled="isProcessing"
-              />
-              <span class="label">右</span>
+            <div class="margin-row">
+              <div class="margin-input">
+                <label>左</label>
+                <input 
+                  type="number" 
+                  v-model.number="settings.left" 
+                  min="0" 
+                  max="500"
+                  :disabled="isProcessing"
+                />
+              </div>
+              <div class="margin-input">
+                <label>右</label>
+                <input 
+                  type="number" 
+                  v-model.number="settings.right" 
+                  min="0" 
+                  max="500"
+                  :disabled="isProcessing"
+                />
+              </div>
             </div>
           </div>
-          <div class="margin-input bottom">
-            <input 
-              type="number" 
-              v-model.number="settings.bottom" 
-              min="0" 
-              max="500"
-              :disabled="isProcessing"
-            />
-            <span class="label">下</span>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 快捷设置 -->
-      <div class="quick-settings">
-        <button class="btn btn-sm" @click="setAllMargins(0)" :disabled="isProcessing">
-          清除边距
-        </button>
-        <button class="btn btn-sm" @click="setAllMargins(10)" :disabled="isProcessing">
-          10mm
-        </button>
-        <button class="btn btn-sm" @click="setAllMargins(20)" :disabled="isProcessing">
-          20mm
-        </button>
-        <button class="btn btn-sm" @click="setAllMargins(25)" :disabled="isProcessing">
-          25mm
-        </button>
-      </div>
-    </div>
-
-    <!-- 输出设置 -->
-    <div class="output-section">
-      <div class="section-title">输出设置</div>
-      <div class="output-options">
-        <div class="option-row">
-          <label>输出目录:</label>
-          <div class="output-path">
-            <input 
-              type="text" 
-              v-model="outputDir" 
-              placeholder="默认与源文件相同目录"
-              :disabled="isProcessing"
-            />
-            <button class="btn btn-sm" @click="selectOutputDir" :disabled="isProcessing">
-              浏览
+          
+          <!-- 快捷设置 -->
+          <div class="quick-settings">
+            <button class="btn btn-sm" @click="setAllMargins(0)" :disabled="isProcessing">
+              清除
+            </button>
+            <button class="btn btn-sm" @click="setAllMargins(10)" :disabled="isProcessing">
+              10mm
+            </button>
+            <button class="btn btn-sm" @click="setAllMargins(20)" :disabled="isProcessing">
+              20mm
+            </button>
+            <button class="btn btn-sm" @click="setAllMargins(25)" :disabled="isProcessing">
+              25mm
             </button>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- 操作按钮 -->
-    <div class="action-buttons">
-      <button 
-        class="btn btn-primary btn-lg"
-        @click="startCrop"
-        :disabled="!canCrop || isProcessing"
-      >
-        <span v-if="isProcessing" class="spinner"></span>
-        <span v-else class="icon">✂️</span>
-        {{ isProcessing ? '处理中...' : '开始裁剪' }}
-      </button>
-    </div>
+        <!-- 输出设置 -->
+        <div class="output-section">
+          <div class="section-title">输出设置</div>
+          <div class="output-options">
+            <div class="option-row">
+              <label>输出目录:</label>
+              <div class="output-path">
+                <input 
+                  type="text" 
+                  v-model="outputDir" 
+                  placeholder="默认与源文件相同目录"
+                  :disabled="isProcessing"
+                />
+                <button class="btn btn-sm" @click="selectOutputDir" :disabled="isProcessing">
+                  浏览
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
-    <!-- 结果提示 -->
-    <div class="result-message" v-if="resultMessage">
-      <div :class="['message', resultMessage.type]">
-        <span class="icon">{{ resultMessage.type === 'success' ? '✓' : '✗' }}</span>
-        {{ resultMessage.text }}
+        <!-- 操作按钮 -->
+        <div class="action-buttons">
+          <button 
+            class="btn btn-primary btn-lg"
+            @click="startCrop"
+            :disabled="!canCrop || isProcessing"
+          >
+            <span v-if="isProcessing" class="spinner"></span>
+            <span v-else class="icon">✂️</span>
+            {{ isProcessing ? '处理中...' : '开始裁剪' }}
+          </button>
+        </div>
+
+        <!-- 结果提示 -->
+        <div class="result-message" v-if="resultMessage">
+          <div :class="['message', resultMessage.type]">
+            <span class="icon">{{ resultMessage.type === 'success' ? '✓' : '✗' }}</span>
+            {{ resultMessage.text }}
+          </div>
+          <button 
+            v-if="resultMessage.type === 'success' && resultMessage.path"
+            class="btn btn-link"
+            @click="openOutputFolder"
+          >
+            打开输出目录
+          </button>
+        </div>
       </div>
-      <button 
-        v-if="resultMessage.type === 'success' && resultMessage.path"
-        class="btn btn-link"
-        @click="openOutputFolder"
-      >
-        打开输出目录
-      </button>
+
+      <!-- 右侧：预览区域 -->
+      <div class="preview-panel">
+        <CropPreview
+          :preview-image="previewData.image"
+          :preview-html="previewData.html"
+          :page-width="previewData.width"
+          :page-height="previewData.height"
+          :file-type="previewData.fileType"
+          :crop-settings="settings"
+          :headers="previewData.headers"
+          :footers="previewData.footers"
+          :margins="previewData.margins"
+          @preview-error="onPreviewError"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive, watch } from 'vue'
+import CropPreview from './CropPreview.vue'
 
 export default {
   name: 'CropSettings',
+  components: {
+    CropPreview
+  },
   setup() {
     const selectedFile = ref(null)
     const pageInfo = ref(null)
     const isProcessing = ref(false)
     const resultMessage = ref(null)
     const outputDir = ref('')
+    const isLoadingPreview = ref(false)
     
     const settings = ref({
       top: 0,
       bottom: 0,
       left: 0,
       right: 0
+    })
+    
+    const previewData = reactive({
+      image: null,
+      html: null,
+      width: 0,
+      height: 0,
+      fileType: null,
+      headers: [],
+      footers: [],
+      margins: null
     })
 
     const canCrop = computed(() => {
@@ -209,17 +218,8 @@ export default {
           
           resultMessage.value = null
           
-          // 如果是 PDF，获取页面信息
-          if (ext === 'pdf') {
-            try {
-              pageInfo.value = await window.electronAPI.crop.getPdfInfo(filePath)
-            } catch (error) {
-              console.error('获取页面信息失败:', error)
-              pageInfo.value = null
-            }
-          } else {
-            pageInfo.value = null
-          }
+          // 加载预览
+          await loadPreview(filePath)
         }
       } catch (error) {
         console.error('选择文件失败:', error)
@@ -228,6 +228,47 @@ export default {
           text: '选择文件失败: ' + error.message
         }
       }
+    }
+    
+    const loadPreview = async (filePath) => {
+      isLoadingPreview.value = true
+      try {
+        const result = await window.electronAPI.crop.generatePreview(filePath)
+        previewData.image = result.image || null
+        previewData.html = result.html || null
+        previewData.width = result.width
+        previewData.height = result.height
+        previewData.fileType = result.fileType
+        previewData.headers = result.headers || []
+        previewData.footers = result.footers || []
+        previewData.margins = result.margins || null
+        
+        // 同时更新 pageInfo 用于显示
+        pageInfo.value = {
+          pageCount: 1,
+          pages: [{
+            width: result.width,
+            height: result.height
+          }]
+        }
+      } catch (error) {
+        console.error('加载预览失败:', error)
+        // 清空预览数据
+        previewData.image = null
+        previewData.html = null
+        previewData.width = 0
+        previewData.height = 0
+        previewData.fileType = null
+        previewData.headers = []
+        previewData.footers = []
+        previewData.margins = null
+      } finally {
+        isLoadingPreview.value = false
+      }
+    }
+    
+    const onPreviewError = (message) => {
+      console.error('预览错误:', message)
     }
 
     const selectOutputDir = async () => {
@@ -255,8 +296,14 @@ export default {
       resultMessage.value = null
       
       try {
-        // 验证设置
-        const validation = await window.electronAPI.crop.validateSettings(settings.value)
+        const cropSettings = {
+          top: Number(settings.value.top) || 0,
+          bottom: Number(settings.value.bottom) || 0,
+          left: Number(settings.value.left) || 0,
+          right: Number(settings.value.right) || 0
+        }
+        
+        const validation = await window.electronAPI.crop.validateSettings(cropSettings)
         if (!validation.valid) {
           resultMessage.value = {
             type: 'error',
@@ -265,7 +312,6 @@ export default {
           return
         }
         
-        // 生成输出路径
         let outputPath = null
         if (outputDir.value) {
           const ext = selectedFile.value.type
@@ -273,10 +319,9 @@ export default {
           outputPath = `${outputDir.value}/${baseName}_cropped.${ext}`
         }
         
-        // 执行裁剪
         const result = await window.electronAPI.crop.document(
           selectedFile.value.path,
-          settings.value,
+          cropSettings,
           outputPath
         )
         
@@ -299,9 +344,7 @@ export default {
 
     const openOutputFolder = () => {
       if (resultMessage.value?.path) {
-        // 使用 shell 打开文件所在目录
         const dir = resultMessage.value.path.replace(/[/\\][^/\\]+$/, '')
-        // 这里可以通过 IPC 调用 shell.openPath
         console.log('打开目录:', dir)
       }
     }
@@ -313,12 +356,15 @@ export default {
       outputDir,
       isProcessing,
       resultMessage,
+      previewData,
+      isLoadingPreview,
       canCrop,
       selectFile,
       selectOutputDir,
       setAllMargins,
       startCrop,
-      openOutputFolder
+      openOutputFolder,
+      onPreviewError
     }
   }
 }
@@ -331,13 +377,35 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 24px;
 }
 
 .panel-header h3 {
-  margin: 0;
+  margin: 0 0 20px 0;
   font-size: 18px;
   color: #333;
+}
+
+.crop-layout {
+  display: flex;
+  gap: 24px;
+  flex: 1;
+  min-height: 700px;
+}
+
+.settings-panel {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.preview-panel {
+  flex: 1;
+  min-width: 400px;
+  min-height: 700px;
+  display: flex;
+  flex-direction: column;
 }
 
 .section-title {
@@ -357,6 +425,7 @@ export default {
   align-items: center;
   gap: 6px;
   transition: all 0.2s;
+  background: #f0f0f0;
 }
 
 .btn:disabled {
@@ -397,11 +466,13 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .file-name {
   color: #333;
   font-weight: 500;
+  word-break: break-all;
 }
 
 .file-hint {
@@ -409,70 +480,43 @@ export default {
   font-size: 12px;
 }
 
-.page-info {
-  background: #f5f5f5;
+.margin-section {
+  background: #fafafa;
   border-radius: 8px;
   padding: 16px;
 }
 
-.info-grid {
-  display: flex;
-  gap: 24px;
-}
-
-.info-item {
-  display: flex;
-  gap: 8px;
-}
-
-.info-item .label {
-  color: #666;
-}
-
-.info-item .value {
-  color: #333;
-  font-weight: 500;
-}
-
-.margin-section {
-  background: #fafafa;
-  border-radius: 8px;
-  padding: 20px;
-}
-
-.margin-preview {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 16px;
-}
-
-.preview-box {
+.margin-inputs {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .margin-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .margin-input {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 4px;
 }
 
+.margin-input label {
+  font-size: 12px;
+  color: #666;
+}
+
 .margin-input input {
-  width: 60px;
-  padding: 6px 8px;
+  width: 100%;
+  padding: 8px 12px;
   border: 1px solid #d9d9d9;
   border-radius: 4px;
-  text-align: center;
   font-size: 14px;
+  box-sizing: border-box;
 }
 
 .margin-input input:focus {
@@ -480,48 +524,10 @@ export default {
   outline: none;
 }
 
-.margin-input .label {
-  font-size: 12px;
-  color: #999;
-}
-
-.page-preview {
-  width: 120px;
-  height: 160px;
-  background: white;
-  border: 2px solid #d9d9d9;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.page-content {
-  width: 80%;
-  height: 80%;
-}
-
-.content-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.line {
-  height: 4px;
-  background: #e8e8e8;
-  border-radius: 2px;
-}
-
-.line.short {
-  width: 60%;
-}
-
 .quick-settings {
   display: flex;
-  justify-content: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .output-section {
@@ -532,17 +538,16 @@ export default {
 
 .option-row {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .option-row label {
   color: #666;
-  white-space: nowrap;
+  font-size: 13px;
 }
 
 .output-path {
-  flex: 1;
   display: flex;
   gap: 8px;
 }

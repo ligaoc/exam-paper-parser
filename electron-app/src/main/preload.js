@@ -90,6 +90,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 获取 PDF 页面信息
     getPdfInfo: (filePath) => ipcRenderer.invoke('crop:getPdfInfo', filePath),
     // 验证裁剪设置
-    validateSettings: (settings) => ipcRenderer.invoke('crop:validateSettings', settings)
+    validateSettings: (settings) => ipcRenderer.invoke('crop:validateSettings', settings),
+    // 生成文档预览
+    generatePreview: (filePath) => ipcRenderer.invoke('crop:generatePreview', filePath)
   }
 })

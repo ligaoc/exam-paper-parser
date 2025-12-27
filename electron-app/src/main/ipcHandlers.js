@@ -140,8 +140,13 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
       images = result.images || []
       styledParagraphs = result.styledParagraphs || []
     } else if (ext === 'pdf') {
+      // PDF 增强解析：提取带样式的段落、图片、表格
       const result = await pdfParser.parse(filePath)
       content = result.text
+      images = result.images || []
+      tables = result.tables || []
+      contentBlocks = result.contentBlocks || []
+      styledParagraphs = result.styledParagraphs || []
     } else {
       throw new Error(`不支持的文件格式: ${ext}`)
     }
@@ -153,9 +158,9 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
     const startTime = Date.now()
     let extracted
     
-    // 对于 DOCX 文件，优先使用带样式的智能识别（会自动排除表格内容）
-    if ((ext === 'docx' || ext === 'doc') && styledParagraphs.length > 0) {
-      // 使用智能识别（基于字号+正则，自动排除表格）
+    // 对于 DOCX 和 PDF 文件，优先使用带样式的智能识别
+    if (styledParagraphs.length > 0) {
+      // 使用智能识别（基于字号+正则）
       const { questions } = structureExtractor.extractWithStyles(styledParagraphs, rule)
       extracted = {
         questions,
@@ -163,7 +168,7 @@ ipcMain.handle('file:parse', async (event, filePath, ruleId) => {
         underlines: structureExtractor.extractUnderlines ? structureExtractor.extractUnderlines(content, rule?.patterns || {}) : []
       }
     } else {
-      // PDF 或其他格式使用旧方法
+      // 降级到旧方法（纯正则匹配）
       extracted = structureExtractor.extract(content, rule)
     }
     const parseTime = Date.now() - startTime
@@ -410,9 +415,13 @@ ipcMain.handle('crop:document', async (event, inputPath, settings, outputPath) =
       throw new Error(validation.errors.join('; '))
     }
     
-    return await cropper.cropDocument(inputPath, settings, outputPath)
+    const result = await cropper.cropDocument(inputPath, settings, outputPath)
+    // 确保返回纯字符串
+    return String(result)
   } catch (error) {
-    throw new Error(error.message || '裁剪文档失败')
+    // 确保错误消息是字符串
+    const errorMessage = error && error.message ? String(error.message) : '裁剪文档失败'
+    throw new Error(errorMessage)
   }
 })
 
@@ -433,6 +442,24 @@ ipcMain.handle('crop:validateSettings', async (event, settings) => {
     return cropper.validateSettings(settings)
   } catch (error) {
     throw new Error(error.message || '验证设置失败')
+  }
+})
+
+// 生成文档预览
+ipcMain.handle('crop:generatePreview', async (event, filePath) => {
+  try {
+    const cropper = getCropperService()
+    const ext = filePath.toLowerCase().split('.').pop()
+    
+    if (ext === 'pdf') {
+      return await cropper.generatePdfPreview(filePath)
+    } else if (ext === 'docx') {
+      return await cropper.getDocxPreview(filePath)
+    } else {
+      throw new Error(`不支持的文件格式: ${ext}`)
+    }
+  } catch (error) {
+    throw new Error(error.message || '生成预览失败')
   }
 })
 

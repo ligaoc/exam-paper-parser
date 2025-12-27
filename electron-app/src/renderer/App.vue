@@ -13,10 +13,12 @@
               <el-icon><Files /></el-icon>
               批量处理
             </el-button>
+            <!-- 文档裁剪功能暂时隐藏
             <el-button size="small" @click="activeView = 'crop'">
               <el-icon><Scissor /></el-icon>
               文档裁剪
             </el-button>
+            -->
             <el-button size="small" @click="activeView = 'history'">
               <el-icon><Clock /></el-icon>
               历史记录
