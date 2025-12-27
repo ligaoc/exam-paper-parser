@@ -79,6 +79,9 @@ function extractWithStyles(styledParagraphs, rule) {
   
   const patterns = rule?.patterns?.questionPatterns || DEFAULT_QUESTION_PATTERNS
   
+  // 获取级别配置（包含分数模式）
+  const levelConfigs = rule?.patterns?.levels || []
+  
   // ========== 第一步：按字号分组 ==========
   // sortKey = (isBold ? 1000 : 0) + fontSize
   const fontSizeGroups = new Map() // sortKey -> { paragraphs: [], patternOrder: Map }
@@ -160,19 +163,29 @@ function extractWithStyles(styledParagraphs, rule) {
           const subLevel = group.patternOrder.get(i) || 0
           const finalLevel = group.baseLevel + subLevel
           
+          // 获取该级别的配置（用于分数提取）
+          const levelConfig = levelConfigs[finalLevel - 1] || null
+          const scorePatterns = levelConfig?.scorePatterns || []
+          
+          // 使用级别分数模式提取分数，如果没有配置则使用默认方法
+          const score = scorePatterns.length > 0 
+            ? extractScoreByLevel(text, scorePatterns)
+            : extractScoreFromText(text)
+          
           allQuestions.push({
             id: uuidv4(),
             level: finalLevel,
             number: match[0].trim(),
             content: text.substring(match[0].length).trim(),
             fullText: text,
-            score: extractScoreFromText(text),
+            score: score,
             paragraphIndex: p.originalIndex,
             fontSize: p.fontSize,
             isBold: p.isBold,
             sortKey: p.sortKey,
             baseLevel: group.baseLevel,
             subLevel: subLevel,
+            levelConfig: levelConfig,
             children: []
           })
           break // 只匹配第一个
@@ -239,6 +252,41 @@ function extractScoreFromText(text) {
     const match = text.match(pattern)
     if (match) {
       return parseInt(match[1], 10)
+    }
+  }
+  
+  return null
+}
+
+/**
+ * 按级别配置提取分数
+ * @param {string} text - 文本
+ * @param {Array} scorePatterns - 该级别的分数模式数组
+ * @returns {number|null} 分数或 null
+ */
+function extractScoreByLevel(text, scorePatterns) {
+  // 如果没有配置分数模式，返回 null
+  if (!scorePatterns || !Array.isArray(scorePatterns) || scorePatterns.length === 0) {
+    return null
+  }
+  
+  // 按顺序尝试匹配，返回第一个匹配的分数
+  for (const pattern of scorePatterns) {
+    try {
+      const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern)
+      const match = text.match(regex)
+      if (match) {
+        // 提取数字（优先使用捕获组，否则从整个匹配中提取）
+        const numMatch = match[1] ? match[1] : match[0].match(/\d+/)
+        if (numMatch) {
+          const value = typeof numMatch === 'string' ? parseInt(numMatch, 10) : parseInt(numMatch[0], 10)
+          if (!isNaN(value)) {
+            return value
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('无效的分数模式:', pattern, e.message)
     }
   }
   
@@ -546,6 +594,9 @@ function detectScores(text) {
 module.exports = {
   // 新版智能识别
   extractWithStyles,
+  
+  // 按级别提取分数
+  extractScoreByLevel,
   
   // 兼容旧版本
   extract,

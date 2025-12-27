@@ -74,6 +74,7 @@
         <!-- 分数统计 -->
         <el-tab-pane label="分数统计" name="scores">
           <div class="scores-panel">
+            <!-- 总体统计 -->
             <el-descriptions :column="2" border>
               <el-descriptions-item label="总题数">
                 {{ totalQuestions }}
@@ -89,18 +90,41 @@
               </el-descriptions-item>
             </el-descriptions>
             
-            <div class="score-list">
-              <h4>分数详情</h4>
-              <el-table :data="scoreList" style="width: 100%" max-height="300">
-                <el-table-column prop="number" label="题号" width="100" />
-                <el-table-column prop="content" label="内容" show-overflow-tooltip />
-                <el-table-column prop="score" label="分数" width="80">
+            <!-- 按级别统计 -->
+            <div v-if="levelStats.length > 0" class="level-stats">
+              <h4>按级别统计</h4>
+              <el-table :data="levelStats" style="width: 100%" size="small">
+                <el-table-column prop="levelName" label="级别" width="120" />
+                <el-table-column prop="totalCount" label="题目数" width="100" />
+                <el-table-column prop="withScoreCount" label="有分数题目" width="120" />
+                <el-table-column prop="totalScore" label="分数总和" width="100">
                   <template #default="{ row }">
-                    <span v-if="row.score">{{ row.score }}分</span>
-                    <span v-else class="no-score">-</span>
+                    {{ row.totalScore }} 分
                   </template>
                 </el-table-column>
               </el-table>
+            </div>
+            
+            <!-- 分数详情（树形结构） -->
+            <div class="score-list">
+              <h4>分数详情</h4>
+              <el-tree
+                v-if="treeData.length"
+                :data="treeData"
+                :props="{ children: 'children', label: 'number' }"
+                default-expand-all
+                :expand-on-click-node="false"
+              >
+                <template #default="{ node, data }">
+                  <div class="score-tree-node">
+                    <span class="node-number">{{ data.number }}</span>
+                    <span class="node-content">{{ truncate(data.content, 40) }}</span>
+                    <el-tag v-if="data.score" type="warning" size="small">{{ data.score }}分</el-tag>
+                    <el-tag type="info" size="small">{{ data.level }}级</el-tag>
+                  </div>
+                </template>
+              </el-tree>
+              <el-empty v-else description="未识别到题目" :image-size="60" />
             </div>
           </div>
         </el-tab-pane>
@@ -261,6 +285,44 @@ const totalScore = computed(() => {
 
 const scoreList = computed(() => {
   return flattenQuestions(props.result?.structure || [])
+})
+
+// 中文数字映射
+const chineseNumbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+
+// 按级别统计
+const levelStats = computed(() => {
+  const stats = new Map()
+  
+  function processQuestion(question) {
+    const level = question.level || 1
+    if (!stats.has(level)) {
+      const levelName = level <= 10 ? `${chineseNumbers[level - 1]}级题号` : `${level}级题号`
+      stats.set(level, {
+        level,
+        levelName,
+        totalCount: 0,
+        withScoreCount: 0,
+        totalScore: 0
+      })
+    }
+    
+    const stat = stats.get(level)
+    stat.totalCount++
+    if (question.score) {
+      stat.withScoreCount++
+      stat.totalScore += question.score
+    }
+    
+    // 递归处理子题目
+    if (question.children) {
+      question.children.forEach(processQuestion)
+    }
+  }
+  
+  (props.result?.structure || []).forEach(processQuestion)
+  
+  return [...stats.values()].sort((a, b) => a.level - b.level)
 })
 
 // 递归计算题目数量
@@ -430,6 +492,37 @@ async function exportResult() {
 .score-list h4 {
   margin-bottom: 10px;
   color: #303133;
+}
+
+.level-stats {
+  margin-top: 20px;
+}
+
+.level-stats h4 {
+  margin-bottom: 10px;
+  color: #303133;
+}
+
+.score-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  width: 100%;
+}
+
+.score-tree-node .node-number {
+  font-weight: 500;
+  color: #409eff;
+  min-width: 50px;
+}
+
+.score-tree-node .node-content {
+  color: #606266;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .no-score {

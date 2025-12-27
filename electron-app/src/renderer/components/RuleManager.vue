@@ -97,10 +97,24 @@
                 删除级别
               </el-button>
             </div>
-            <PatternSelector 
-              v-model="level.patterns" 
-              category="question"
-            />
+            
+            <!-- 题号模式 -->
+            <div class="level-section">
+              <span class="section-label">题号模式</span>
+              <PatternSelector 
+                v-model="level.patterns" 
+                category="question"
+              />
+            </div>
+            
+            <!-- 分数模式（级别专属） -->
+            <div class="level-section">
+              <span class="section-label">分数模式</span>
+              <PatternSelector 
+                v-model="level.scorePatterns" 
+                category="score"
+              />
+            </div>
           </div>
           
           <el-button type="primary" text @click="addLevel">
@@ -112,12 +126,6 @@
         <el-divider content-position="left">其他模式配置</el-divider>
         
         <el-collapse v-model="activeCollapse">
-          <el-collapse-item title="分数模式" name="score">
-            <PatternSelector 
-              v-model="currentRule.patterns.score" 
-              category="score"
-            />
-          </el-collapse-item>
           <el-collapse-item title="括号模式" name="bracket">
             <PatternSelector 
               v-model="currentRule.patterns.bracket" 
@@ -151,7 +159,7 @@ const rules = ref([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const isEditing = ref(false)
-const activeCollapse = ref(['score'])
+const activeCollapse = ref(['bracket'])
 
 // 中文数字映射
 const chineseNumbers = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
@@ -162,11 +170,10 @@ const currentRule = reactive({
   description: '',
   patterns: {
     levels: [
-      { name: '一级题号', patterns: [] },
-      { name: '二级题号', patterns: [] },
-      { name: '三级题号', patterns: [] }
+      { name: '一级题号', patterns: [], scorePatterns: [] },
+      { name: '二级题号', patterns: [], scorePatterns: [] },
+      { name: '三级题号', patterns: [], scorePatterns: [] }
     ],
-    score: [],
     bracket: [],
     underline: []
   }
@@ -213,19 +220,40 @@ function editRule(rule) {
 
 // 迁移旧格式数据到新格式
 function migratePatterns(oldPatterns) {
-  // 如果已经是新格式，直接返回
-  if (oldPatterns.levels) {
-    return oldPatterns
+  // 如果已经是新格式（有 levels 数组且包含 scorePatterns），直接返回
+  if (oldPatterns.levels && 
+      Array.isArray(oldPatterns.levels) && 
+      oldPatterns.levels.length > 0 &&
+      oldPatterns.levels[0].scorePatterns !== undefined) {
+    // 确保没有全局 score 字段
+    const { score, ...rest } = oldPatterns
+    return rest
   }
   
-  // 转换旧格式到新格式
+  // 如果有 levels 但没有 scorePatterns，需要迁移
+  if (oldPatterns.levels && Array.isArray(oldPatterns.levels)) {
+    const globalScorePatterns = oldPatterns.score || []
+    const newLevels = oldPatterns.levels.map(level => ({
+      name: level.name,
+      patterns: level.patterns || [],
+      scorePatterns: level.scorePatterns || [...globalScorePatterns]
+    }))
+    
+    return {
+      levels: newLevels,
+      bracket: oldPatterns.bracket || [],
+      underline: oldPatterns.underline || []
+    }
+  }
+  
+  // 转换最旧格式（level1/level2/level3）到新格式
+  const globalScorePatterns = oldPatterns.score || []
   return {
     levels: [
-      { name: '一级题号', patterns: oldPatterns.level1 || [] },
-      { name: '二级题号', patterns: oldPatterns.level2 || [] },
-      { name: '三级题号', patterns: oldPatterns.level3 || [] }
+      { name: '一级题号', patterns: oldPatterns.level1 || [], scorePatterns: [...globalScorePatterns] },
+      { name: '二级题号', patterns: oldPatterns.level2 || [], scorePatterns: [...globalScorePatterns] },
+      { name: '三级题号', patterns: oldPatterns.level3 || [], scorePatterns: [...globalScorePatterns] }
     ],
-    score: oldPatterns.score || [],
     bracket: oldPatterns.bracket || [],
     underline: oldPatterns.underline || []
   }
@@ -315,7 +343,8 @@ function addLevel() {
   
   currentRule.patterns.levels.push({
     name: levelName,
-    patterns: []
+    patterns: [],
+    scorePatterns: []
   })
 }
 
@@ -336,11 +365,10 @@ function resetCurrentRule() {
     description: '',
     patterns: {
       levels: [
-        { name: '一级题号', patterns: [] },
-        { name: '二级题号', patterns: [] },
-        { name: '三级题号', patterns: [] }
+        { name: '一级题号', patterns: [], scorePatterns: [] },
+        { name: '二级题号', patterns: [], scorePatterns: [] },
+        { name: '三级题号', patterns: [], scorePatterns: [] }
       ],
-      score: [],
       bracket: [],
       underline: []
     }
@@ -399,5 +427,21 @@ function formatDate(dateStr) {
   font-weight: 600;
   font-size: 14px;
   color: #303133;
+}
+
+.level-section {
+  margin-bottom: 12px;
+}
+
+.level-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-label {
+  display: block;
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 6px;
+  font-weight: 500;
 }
 </style>

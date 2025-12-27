@@ -199,7 +199,7 @@ function importRules(jsonStr) {
 }
 
 /**
- * 迁移旧格式数据到新格式
+ * 迁移旧格式数据到新格式（level1/level2/level3 -> levels数组）
  * @param {Object} oldPatterns - 旧格式模式配置
  * @returns {Object} 新格式模式配置
  */
@@ -227,6 +227,45 @@ function migratePatterns(oldPatterns) {
 }
 
 /**
+ * 迁移全局分数模式到级别分数模式
+ * 将旧的全局 score 模式复制到每个级别的 scorePatterns
+ * @param {Object} patterns - 模式配置（已经过 migratePatterns 处理）
+ * @returns {Object} 包含级别分数模式的新格式配置
+ */
+function migrateToLevelScorePatterns(patterns) {
+  if (!patterns || typeof patterns !== 'object') {
+    return getDefaultPatterns()
+  }
+  
+  // 检查是否已经是新格式（levels[0].scorePatterns !== undefined）
+  if (patterns.levels && 
+      Array.isArray(patterns.levels) && 
+      patterns.levels.length > 0 &&
+      patterns.levels[0].scorePatterns !== undefined) {
+    // 已经是新格式，确保没有全局 score 字段
+    const { score, ...rest } = patterns
+    return rest
+  }
+  
+  // 获取旧的全局分数模式
+  const globalScorePatterns = patterns.score || []
+  
+  // 为每个级别添加分数模式（默认使用全局模式）
+  const newLevels = (patterns.levels || []).map(level => ({
+    name: level.name,
+    patterns: level.patterns || [],
+    scorePatterns: [...globalScorePatterns]
+  }))
+  
+  // 返回新格式，不再包含全局 score 字段
+  return {
+    levels: newLevels,
+    bracket: patterns.bracket || [],
+    underline: patterns.underline || []
+  }
+}
+
+/**
  * 验证并规范化模式配置
  * @param {Object} patterns - 模式配置
  * @returns {Object} 规范化后的模式配置
@@ -236,37 +275,40 @@ function validatePatterns(patterns) {
     return getDefaultPatterns()
   }
   
-  // 先迁移旧格式
-  const migrated = migratePatterns(patterns)
+  // 先迁移旧格式（level1/level2 -> levels）
+  const migratedLevels = migratePatterns(patterns)
+  
+  // 再迁移全局分数模式到级别分数模式
+  const migratedScores = migrateToLevelScorePatterns(migratedLevels)
   
   // 验证新格式
   const validated = {
-    levels: validateLevelsArray(migrated.levels),
-    score: validatePatternArray(migrated.score),
-    bracket: validatePatternArray(migrated.bracket),
-    underline: validatePatternArray(migrated.underline)
+    levels: validateLevelsArrayWithScore(migratedScores.levels),
+    bracket: validatePatternArray(migratedScores.bracket),
+    underline: validatePatternArray(migratedScores.underline)
   }
   
   return validated
 }
 
 /**
- * 验证级别数组
+ * 验证级别数组（包含分数模式）
  * @param {Array} levels - 级别数组
  * @returns {Array} 验证后的级别数组
  */
-function validateLevelsArray(levels) {
+function validateLevelsArrayWithScore(levels) {
   if (!Array.isArray(levels) || levels.length === 0) {
     return [
-      { name: '一级题号', patterns: [] },
-      { name: '二级题号', patterns: [] },
-      { name: '三级题号', patterns: [] }
+      { name: '一级题号', patterns: [], scorePatterns: [] },
+      { name: '二级题号', patterns: [], scorePatterns: [] },
+      { name: '三级题号', patterns: [], scorePatterns: [] }
     ]
   }
   
   return levels.map((level, index) => ({
     name: level.name || `${index + 1}级题号`,
-    patterns: validatePatternArray(level.patterns)
+    patterns: validatePatternArray(level.patterns),
+    scorePatterns: validatePatternArray(level.scorePatterns || [])
   }))
 }
 
@@ -291,17 +333,16 @@ function validatePatternArray(arr) {
 }
 
 /**
- * 获取默认模式配置（新格式）
+ * 获取默认模式配置（新格式，包含级别分数模式）
  * @returns {Object} 默认模式配置
  */
 function getDefaultPatterns() {
   return {
     levels: [
-      { name: '一级题号', patterns: [] },
-      { name: '二级题号', patterns: [] },
-      { name: '三级题号', patterns: [] }
+      { name: '一级题号', patterns: [], scorePatterns: [] },
+      { name: '二级题号', patterns: [], scorePatterns: [] },
+      { name: '三级题号', patterns: [], scorePatterns: [] }
     ],
-    score: [],
     bracket: [],
     underline: []
   }
@@ -342,5 +383,7 @@ module.exports = {
   copyRule,
   getDefaultPatterns,
   validatePatterns,
-  migratePatterns
+  migratePatterns,
+  migrateToLevelScorePatterns,
+  validateLevelsArrayWithScore
 }
